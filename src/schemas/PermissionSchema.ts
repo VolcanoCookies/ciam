@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import REFS from './refs';
+import { REFS } from './refs';
 
 const Schema = mongoose.Schema;
 const Types = mongoose.Types;
@@ -41,4 +41,4 @@ const PermissionSchema = new Schema<Permission>({
 
 const Permission = mongoose.model<Permission>(REFS.PERMISSION, PermissionSchema);
 
-export default Permission;
+export { Permission };

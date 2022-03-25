@@ -1,7 +1,7 @@
 import express from 'express';
 import { checkSchema } from 'express-validator';
 import sanitize from 'mongo-sanitize';
-import Role from '../schemas/RoleSchema.js';
+import { Role } from '../schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
 import { stringToObjectIdArray, unique } from '../utils.js';
 
@@ -111,7 +111,12 @@ RoleRouter.post('/update', getRoleBody, async (req, res) => {
 
     const role: Document<Role> & Role = req.body.role;
 
-    const { description, inherit, permissions } = req.body;
+    const { name, description, inherit, permissions } = req.body;
+
+    if (name) {
+        if (name.length == 0) return res.status(400).send('empty name');
+        role.name = name;
+    }
 
     if (description) {
         if (description.length == 0) return res.status(400).send('empty description');

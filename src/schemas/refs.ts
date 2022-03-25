@@ -1,7 +1,7 @@
-const REFS = {
-    USER: 'user',
-    ROLE: 'role',
-    PERMISSION: 'permission'
+enum REFS {
+    USER = 'user',
+    ROLE = 'role',
+    PERMISSION = 'permission'
 };
 
-export default REFS;
+export { REFS };

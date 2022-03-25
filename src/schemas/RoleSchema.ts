@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import REFS from './refs.js';
+import { REFS } from './refs.js';
 
 const Schema = mongoose.Schema;
 const Types = mongoose.Types;
@@ -37,4 +37,4 @@ const RoleSchema = new Schema<Role>({
 
 const Role = mongoose.model<Role>(REFS.ROLE, RoleSchema);
 
-export default Role;
+export { Role };

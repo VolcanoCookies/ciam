@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import REFS from './refs';
+import { REFS } from './refs';
 
 const Schema = mongoose.Schema;
 const Types = mongoose.Types;
@@ -56,4 +56,4 @@ const UserSchema = new Schema<User>({
 
 const User = mongoose.model<User>(REFS.USER, UserSchema);
 
-export default User;
+export { User };
