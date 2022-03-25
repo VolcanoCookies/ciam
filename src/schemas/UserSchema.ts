@@ -48,7 +48,10 @@ const UserSchema = new Schema<User>({
         type: DiscordUserSchema,
         optional: true
     },
-    name: String,
+    name: {
+        type: String,
+        index: true
+    },
     avatar: String,
     roles: [{ type: Schema.Types.ObjectId, ref: REFS.ROLE }],
     permissions: [{ type: Schema.Types.ObjectId, ref: REFS.PERMISSION }]
