@@ -28,11 +28,7 @@ const RoleSchema = new Schema<Role>({
         type: Schema.Types.ObjectId,
         auto: true
     },
-    name: {
-        type: String,
-        minlength: 4,
-        maxlength: 32
-    },
+    name: String,
     description: String,
     inherit: [{ type: Schema.Types.ObjectId, refs: REFS.ROLE }],
     permissions: [{ type: Schema.Types.ObjectId, ref: REFS.PERMISSION }],
