@@ -1,144 +1,146 @@
-import { Permission } from './schemas/PermissionSchema.js';
 import { User } from './schemas/UserSchema.js';
 import { Role } from './schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
 import { REFS } from './schemas/refs.js';
-import _, { min } from 'lodash';
+import _ from 'lodash';
 
-// TODO: Figure out what exactly a permission is, and how to best represent it in code to optimize checking
+/**
+ * Rules for permissions:
+ * 
+ * 1. Required permissions cannot have wildcards
+ * 2. Wildcards are only allowed on held permissions
+ * 3. A permission cannot be empty
+ * 4. A permission is a string of keys delimited by '.'
+ * 5. A permission key has to either match '[a-z]+', or be a special key
+ * 6. '*' can be used as a special key as the very end of a permission flag, will match anything
+ * 7. '?' can be used as a special key anywhere in the flag, will match any single key
+ * 
+ */
 
-class ValidatedPermissions {
-	path: Array<string>;
-	wildcard: boolean;
-	length: number;
-	raw: string;
 
-	constructor(permissions: Array<string>) {
-		this.wildcard = _.last(permissions) == '*';
-		this.path = this.wildcard ? _.initial(permissions) : permissions;
-		this.length = this.path.length;
-		this.raw = _.join(permissions, '.');
+// Our lord an savior Ash has come to bless us
+class Flag extends String {
+	isWildcard: boolean;
+	keys: Array<string>;
+
+	constructor(value: string) {
+		if (!validFlag(value)) throw new Error(`Invalid permission flag ${value}`);
+		super(value);
+
+		this.isWildcard = value == '*' || value.endsWith('.*');
+		this.keys = value.split('.');
 	}
 
-	has(other: ValidatedPermissions): boolean {
-		function compareAll(arr1: Array<string>, arr2: Array<string>): boolean {
-			for (var i = 0; i < Math.min(arr1.length, arr2.length); i++) {
-				if (arr1[i] != arr2[i]) return false;
-			}
-			return true;
+	public static validate(value: string | Flag): Flag {
+		if (!(value instanceof Flag)) {
+			return new Flag(value);
 		}
+		return value;
+	}
 
-		if (this.length == other.length) {
-			if (this.wildcard != other.wildcard) return false;
-
-			return compareAll(this.path, other.path);
-		} else {
-			return (this.length > other.length ? other.wildcard : this.wildcard) && compareAll(this.path, other.path);
-		}
+	equals(other: Flag): boolean {
+		return this.toString() == other.toString();
 	}
 }
 
-class Wildcard {
-
-	addKey(path: any) { }
-	hasPermission(path: any): boolean {
-		return true;
-	}
+/**
+ * Check if a string is a valid permission flag.
+ * 
+ * @param perm a string to check.
+ * @returns true if {@link perm} is a valid permission flag.
+ */
+function validFlag(perm: string): boolean {
+	if (perm.length == 0) return false;
+	return perm.match(/^(?:([a-z]+|\?)(?:\.(?:[a-z]+|\?))*(\.\*)?|\*)$/) != undefined;
 }
 
-class PermissionTree {
-	branches: Map<string, PermissionTree | Wildcard> = new Map();
-
-	addKey(path: Array<string>) {
-		if (path.length == 0) return;
-
-		if (path.length == 2 && path[1] == "*")
-			this.branches.set(path[0], new Wildcard());
-		else {
-			var branch = this.branches.get(path[0]);
-			if (branch) branch.addKey(path.slice(1));
-			else {
-				branch = new PermissionTree();
-				branch.addKey(path.slice(1));
-				this.branches.set(path[0], branch);
-			}
-		}
-
+/**
+ * Check if a permission flag matches another, taking into consideration wildcards, and other special keys.
+ * 
+ * @param required A required permission flag.
+ * @param held A held permission flag.
+ * @returns true if {@link held} matches {@link required}.
+ */
+function has(required: Flag, held: Flag): boolean {
+	if (required.length == 0 || held.length == 0) return false;
+	if (held.keys > required.keys) return false;
+	for (var i = 0; i < required.keys.length; i++) {
+		if (held.keys[i] == '*') return true;
+		else if (held.keys[i] == '?') continue;
+		else if (held.keys[i] != required.keys[i]) return false;
 	}
-
-	hasPermission(path: Array<string>): boolean {
-		if (path.length == 0) return false;
-
-		const branch = this.branches.get(path[0]);
-		if (branch) return branch.hasPermission(path.slice(1));
-		else return false;
-	}
-
+	return true;
 }
 
-function validate(permission: string | Array<string>): ValidatedPermissions | undefined {
-	if (Array.isArray(permission)) {
-		const valid = permission.every((s, i) => {
-			return i + 1 == permission.length ? s.match(/[a-z\*]+/) : s.match(/[a-z]+/);
-		}) && permission.length > 0;
-		if (valid) return new ValidatedPermissions(permission);
-		else return undefined;
-	} else {
-		return validate(permission.split('.'));
-	}
+/**
+ * Check if a set of permission flags exist within another set of permission flags.
+ * 
+ * Calls {@link has} to check if individual flags match.
+ * 
+ * @param required permission flags to find within {@link held}.
+ * @param held permission flags to look in.
+ * @returns true if all flags in {@link required} have at least 1 flag in {@link held} that matches.
+ */
+function hasAll(required: Array<Flag>, held: Array<Flag>): boolean {
+	if (required.some(r => r.isWildcard)) throw new Error('Required permissions cannot have wildcards.');
+	return required.every(r => {
+		return held.some(h => { return has(r, h); });
+	});
 }
 
-function filterValid(permissions: Array<string>): Array<string> {
-	return permissions.map(p => validate(p))
-		.filter(v => v != undefined)
-		.map(v => v!!.raw);
-}
+async function flattenUser(user: Document<User> & User): Promise<Array<Flag>> {
 
-async function flattenUser(user: Document<User> & User): Promise<Set<ValidatedPermissions>> {
-
-	const permissions = new Set<ValidatedPermissions>();
+	const flags = new Array<Flag>();
 
 	user = await user.populate<{ roles: Types.Array<Role>; }>(REFS.ROLE, 'permissions');
 
 	user.permissions.forEach(p => {
-		const v = validate(p);
-		if (v) permissions.add(v);
+		try {
+			flags.push(Flag.validate(p));
+		} catch (e) { }
 	});
 
 	user.roles.forEach(r => {
 		(<Role>r).permissions.forEach(p => {
-			const v = validate(p);
-			if (v) permissions.add(v);
+			try {
+				flags.push(Flag.validate(p));
+			} catch (e) { }
 		});
 	});
 
-	return permissions;
+	return _.uniq(flags);
 }
 
-function flattenRole(role: Role): Set<ValidatedPermissions> {
+function flattenRole(role: Role): Array<Flag> {
 
-	const permissions = new Set<ValidatedPermissions>();
+	const flags = new Array<Flag>();
 
 	role.permissions.forEach(p => {
-		const v = validate(p);
-		if (v) permissions.add(v);
+		try {
+			flags.push(Flag.validate(p));
+		} catch (e) { }
 	});
 
-	return permissions;
+	return _.uniq(flags);
 }
 
-// Returns true if required is empty
-function has(current: Set<ValidatedPermissions>, required: Set<ValidatedPermissions>): boolean {
-	const cur = Array.from(current);
-	const req = Array.from(required);
-	return req.every(r => {
-		cur.some(c => c.has(r));
-	});
-}
-
-async function hasPermissions(subject: (Document<User> & User) | (Document<Role> & Role), required: Set<ValidatedPermissions>): Promise<boolean> {
+async function hasPermissions(subject: (Document<User> & User) | (Document<Role> & Role), required: Array<Flag>): Promise<boolean> {
 	const permissions = subject instanceof User ? await flattenUser(subject as Document<User> & User) : flattenRole(subject as Document<Role> & Role);
-	return has(permissions, required);
+	return hasAll(_.uniq(required), permissions);
 }
 
-export { validate, filterValid, ValidatedPermissions, has, hasPermissions, flattenUser, flattenRole };
+function flagArray(perms: Array<string>, ignoreInvalid: boolean = false, removeDuplicate: boolean = true): Array<Flag> {
+	const valid = new Array<Flag>();
+	for (const p of perms) {
+		if (ignoreInvalid) {
+			try {
+				valid.push(Flag.validate(p));
+			} catch (e) { }
+		} else {
+			valid.push(Flag.validate(p));
+		}
+	}
+	return removeDuplicate ? _.uniq(valid) : valid;
+}
+
+export { Flag, has, hasAll, validFlag, flattenUser, flattenRole, hasPermissions, flagArray };

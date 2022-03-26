@@ -4,7 +4,7 @@ import sanitize from 'mongo-sanitize';
 import { Role } from '../schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
 import { stringToObjectIdArray, unique } from '../utils.js';
-import { validate, ValidatedPermissions } from '../permission.js';
+import { Flag, flagArray } from '../permission.js';
 
 const RoleRouter = express.Router();
 
@@ -131,8 +131,12 @@ RoleRouter.post('/update', getRoleBody, async (req, res) => {
 
     if (permissions) {
         if (!Array.isArray(permissions)) return res.status(400).send('permissions not array');
-        if (!permissions.every(p => validate(p) != undefined)) return res.status(400).send('permissions invalid');
-        role.permissions = permissions as Types.Array<string>;
+
+        try {
+            role.set('permissions', flagArray(permissions));
+        } catch (e) {
+            return res.status(400).send('permissions invalid');
+        }
     }
 
     const op = await role.save();
