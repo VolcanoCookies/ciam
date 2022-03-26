@@ -1,8 +1,8 @@
-import mongoose from 'mongoose';
-import { REFS } from './refs';
+import mongoose, { Types } from 'mongoose';
+import { REFS } from './refs.js';
+import { Role } from './RoleSchema.js';
 
 const Schema = mongoose.Schema;
-const Types = mongoose.Types;
 
 /**
  * A user is most often a discord account, but could for example also be a service account for some application
@@ -25,9 +25,9 @@ interface User {
     // Name of this user
     avatar: string,
     // Avatar of this user, TODO: figure out if url or ref or whatever
-    roles: Types.Array<Types.ObjectId>,
+    roles: Types.Array<Types.ObjectId> | Types.Array<Role>,
     // The roles this user has, will inherit all their permissions
-    permissions: Types.Array<Types.ObjectId>,
+    permissions: Types.Array<string>,
     // The explicit permissions this user has
     discord: DiscordUser;
 }
@@ -54,7 +54,7 @@ const UserSchema = new Schema<User>({
     },
     avatar: String,
     roles: [{ type: Schema.Types.ObjectId, ref: REFS.ROLE }],
-    permissions: [{ type: Schema.Types.ObjectId, ref: REFS.PERMISSION }]
+    permissions: [{ type: String, ref: REFS.PERMISSION }]
 });
 
 const User = mongoose.model<User>(REFS.USER, UserSchema);

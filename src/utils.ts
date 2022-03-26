@@ -1,14 +1,17 @@
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 
 export function stringToObjectIdArray(arr: Array<string>): Array<Types.ObjectId> {
 
-    return arr.map(e => {
+    const final = new Array<Types.ObjectId>();
+
+    for (const s of arr) {
         try {
-            return new mongoose.Types.ObjectId(e);
-        } catch (e) {
-            undefined;
-        }
-    }).filter(e => e);
+            const o = new Types.ObjectId(s);
+            final.push(o);
+        } catch (e) { }
+    }
+
+    return final;
 };
 
 export function unique<T>(arr: Array<T>): Array<T> {

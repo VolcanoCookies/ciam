@@ -4,6 +4,7 @@ import sanitize from 'mongo-sanitize';
 import { Role } from '../schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
 import { stringToObjectIdArray, unique } from '../utils.js';
+import { validate, ValidatedPermissions } from '../permission.js';
 
 const RoleRouter = express.Router();
 
@@ -125,12 +126,13 @@ RoleRouter.post('/update', getRoleBody, async (req, res) => {
 
     if (inherit) {
         if (!Array.isArray(inherit)) return res.status(400).send('inherit not array');
-        role.inherit = stringToObjectIdArray(unique(inherit));
+        //role.inherit = stringToObjectIdArray(unique(inherit));
     }
 
     if (permissions) {
         if (!Array.isArray(permissions)) return res.status(400).send('permissions not array');
-        role.permissions = stringToObjectIdArray(unique(permissions));
+        if (!permissions.every(p => validate(p) != undefined)) return res.status(400).send('permissions invalid');
+        role.permissions = permissions as Types.Array<string>;
     }
 
     const op = await role.save();
@@ -141,4 +143,4 @@ RoleRouter.post('/update', getRoleBody, async (req, res) => {
 
 });
 
-export default RoleRouter;
+export { RoleRouter };

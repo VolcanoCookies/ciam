@@ -1,8 +1,5 @@
-import mongoose from 'mongoose';
+import mongoose, { Types, Schema } from 'mongoose';
 import { REFS } from './refs.js';
-
-const Schema = mongoose.Schema;
-const Types = mongoose.Types;
 
 /**
  * A role is an abstract grouping of permissions, it can be assigned to users or inherited by other roles.
@@ -16,9 +13,9 @@ interface Role {
     // The description of this role
     description: string,
     // Roles to inherit permissions from
-    inherit: Types.Array<Types.ObjectId>,
+    //inherit: Types.Array<Types.ObjectId>,
     // Explicit permissions for this role
-    permissions: Types.Array<Types.ObjectId>,
+    permissions: Types.Array<string>,
     // Who created this role
     creator: Types.ObjectId;
 }
@@ -33,8 +30,8 @@ const RoleSchema = new Schema<Role>({
         index: true
     },
     description: String,
-    inherit: [{ type: Schema.Types.ObjectId, refs: REFS.ROLE }],
-    permissions: [{ type: Schema.Types.ObjectId, ref: REFS.PERMISSION }],
+    //inherit: [{ type: Schema.Types.ObjectId, refs: REFS.ROLE }],
+    permissions: [{ type: String, ref: REFS.PERMISSION }],
     creator: { type: Schema.Types.ObjectId, ref: REFS.USER }
 });
 

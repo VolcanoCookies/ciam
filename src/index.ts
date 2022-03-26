@@ -2,7 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import sanitize from 'mongo-sanitize';
 import mongoose from 'mongoose';
-import RoleRouter from './routes/RoleRouter.js';
+import { PermissionRouter } from './routes/PermissionRouter.js';
+import { RoleRouter } from './routes/RoleRouter.js';
 
 const app = express();
 
@@ -63,6 +64,7 @@ app.use('/callback', async (req, res) => {
 });
 
 app.use('/role', RoleRouter);
+app.use('/permission', PermissionRouter);
 
 app.listen(process.env.PORT, async () => {
 	await init();
