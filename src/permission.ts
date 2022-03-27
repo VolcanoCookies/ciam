@@ -1,5 +1,5 @@
-import { User } from './schemas/UserSchema.js';
-import { Role } from './schemas/RoleSchema.js';
+import { User, UserEntry } from './schemas/UserSchema.js';
+import { Role, RoleEntry } from './schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
 import { REFS } from './schemas/refs.js';
 import _ from 'lodash';
@@ -43,6 +43,11 @@ class Flag extends String {
 	}
 }
 
+interface CheckResult {
+	passed: boolean;
+	missing: Array<Flag> | undefined;
+}
+
 /**
  * Check if a string is a valid permission flag.
  * 
@@ -81,14 +86,27 @@ function has(required: Flag, held: Flag): boolean {
  * @param held permission flags to look in.
  * @returns true if all flags in {@link required} have at least 1 flag in {@link held} that matches.
  */
-function hasAll(required: Array<Flag>, held: Array<Flag>): boolean {
+function hasAll(required: Array<Flag>, held: Array<Flag>, returnMissing: boolean = false): CheckResult {
 	if (required.some(r => r.isWildcard)) throw new Error('Required permissions cannot have wildcards.');
-	return required.every(r => {
-		return held.some(h => { return has(r, h); });
-	});
+	if (returnMissing) {
+		const missing = required.filter(r => {
+			return !held.some(h => { return has(r, h); });
+		});
+		return {
+			passed: missing.length == 0,
+			missing: missing
+		};
+	} else {
+		return {
+			passed: required.every(r => {
+				return held.some(h => { return has(r, h); });
+			}),
+			missing: undefined
+		};
+	}
 }
 
-async function flattenUser(user: Document<User> & User): Promise<Array<Flag>> {
+async function flattenUser(user: UserEntry): Promise<Array<Flag>> {
 
 	const flags = new Array<Flag>();
 
@@ -111,7 +129,7 @@ async function flattenUser(user: Document<User> & User): Promise<Array<Flag>> {
 	return _.uniq(flags);
 }
 
-function flattenRole(role: Role): Array<Flag> {
+function flattenRole(role: RoleEntry): Array<Flag> {
 
 	const flags = new Array<Flag>();
 
