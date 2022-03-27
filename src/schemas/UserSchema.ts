@@ -1,4 +1,4 @@
-import mongoose, { Types } from 'mongoose';
+import mongoose, { Document, Types } from 'mongoose';
 import { REFS } from './refs.js';
 import { Role } from './RoleSchema.js';
 
@@ -32,6 +32,7 @@ interface User {
     discord: DiscordUser;
 }
 
+type UserEntry = Document<unknown, any, User> & User & { _id: Types.ObjectId; };
 
 const DiscordUserSchema = new Schema<DiscordUser>({
     id: {
@@ -59,4 +60,4 @@ const UserSchema = new Schema<User>({
 
 const User = mongoose.model<User>(REFS.USER, UserSchema);
 
-export { User };
+export { User, UserEntry };
