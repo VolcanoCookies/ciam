@@ -66,9 +66,9 @@ RoleRouter.post('/create', async (req, res) => {
 
     const { name, description } = req.body;
 
-    if (!name || name.length == 0) return res.status(404).send('Missing name.');
+    if (!name || name.length == 0) return res.status(400).send('Missing name.');
 
-    if (!description) return res.status(404).send('Missing description.');
+    if (!description) return res.status(400).send('Missing description.');
 
     const role = new Role({
         name: name,
