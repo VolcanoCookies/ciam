@@ -1,11 +1,22 @@
 import assert from 'assert'
+import _ from 'lodash'
 
-import { validate, flattenRole } from '../dist/permission.js'
+import { has, hasAll, validFlag, flattenRole, flagArray, Flag } from '../dist/permission.js'
 
 describe('permission', function () {
-    describe('#validate()', function () {
 
-        it('should return undefined when supplied with invalid permissions', function () {
+    const validFlagStrings = [
+        'some.valid',
+        'permissions.here.are.*',
+        '*',
+        'single',
+        'some.?.?.ppe.*',
+        '?',
+        '?.ms'
+    ]
+
+    describe('#validFlag()', function () {
+        it('should detect invalid permission flags', function () {
             const invalid = [
                 'some.invalid.permissions.',
                 'more.invalid.*.perms',
@@ -13,28 +24,24 @@ describe('permission', function () {
                 '',
                 '0',
                 '.test',
-                '.test.test.'
+                '.test.test.',
+                'with.invalid1.123.charS',
+                'more.$.e',
+                'mor?'
             ]
 
             for (const i of invalid) {
-                assert.equal(validate(i), undefined)
+                assert.ok(!validFlag(i), `Invalid flag passed: ${i}`)
             }
         })
 
         it('should detect "*" as a valid permission', function () {
-            assert.notEqual(validate('*'), undefined)
+            assert.ok(validFlag('*'))
         })
 
-        it('should return ValidatedPermissions when supplied with valid permissions', function () {
-            const valid = [
-                'some.valid',
-                'permissions.here.are.*',
-                '*',
-                'single',
-            ]
-
-            for (const v of valid) {
-                assert.notEqual(validate(v), undefined)
+        it('should detect valid permission flags', function () {
+            for (const v of validFlagStrings) {
+                assert.ok(validFlag(v))
             }
         })
 
@@ -46,8 +53,18 @@ describe('permission', function () {
             ]
 
             for (const w of wildcards) {
-                assert.equal(validate(w).wildcard, true)
+                assert.equal(Flag.validate(w).isWildcard, true)
             }
+        })
+    })
+
+    describe('Flag', function () {
+        describe('#validate()', function () {
+            it('Create Flag class from correct permission flag strings', function () {
+                for (const v of validFlagStrings) {
+                    assert.ok(Flag.validate(v))
+                }
+            })
         })
     })
 
@@ -66,25 +83,89 @@ describe('permission', function () {
             const res = Array.from(flattenRole(role))
 
             assert.equal(res.length, 3)
-            assert.equal(res[0].raw, 'some.valid.permissions')
-            assert.equal(res[1].raw, 'valid')
-            assert.equal(res[2].raw, '*')
+            assert.equal(res[0], 'some.valid.permissions')
+            assert.equal(res[1], 'valid')
+            assert.equal(res[2], '*')
         })
     })
 
     describe('#has()', function () {
-        const required = new Set([
-            'ciam.role.create',
-            'ciam.role.view'
-        ].map(p => validate(p)))
-
-        it('should return true for having correct permissions', function () {
-            const current = [
-                'ciam.role.*'
+        it('should correctly pass or fail individual permission checks', function () {
+            const tests = [
+                {
+                    required: 'ciam.role.create',
+                    valid: [
+                        'ciam.role.create',
+                        'ciam.role.*',
+                        'ciam.*',
+                        '*',
+                        '?.*',
+                        'ciam.?.create',
+                        'ciam.role.?'
+                    ],
+                    invalid: [
+                        'ciam',
+                        'ciam.role',
+                        'ciam.role.create.new',
+                        'role.*'
+                    ]
+                }
             ]
 
-            assert.ok(has())
+            for (const { required, valid, invalid } of tests) {
+                for (const v of valid) {
+                    assert.ok(has(Flag.validate(required), Flag.validate(v)), `Failed on valid: ${v}`)
+                }
+                for (const i of invalid) {
+                    assert.ok(!has(Flag.validate(required), Flag.validate(i)), `Failed on invalid: ${i}`)
+                }
+            }
+
         })
+    })
+
+    describe('#hasAll()', function () {
+
 
     })
+
+    describe('permformance', function () {
+        it('performance test', function () {
+            const alpha = 'abcdefghijklmnopqrstuvwxyz'
+            function randomString(len) {
+                var str = ''
+                for (var i = 0; i < len; i++) {
+                    str += alpha.charAt(_.random(alpha.length - 1))
+                }
+                return str
+            }
+
+            const held = new Array()
+            for (var i = 0; i < 100; i++) {
+                var str = ''
+                const r = _.random(5, 10)
+                for (var j = 0; j < r; j++) {
+                    str += randomString(_.random(4, 32))
+                    if (j + 1 < r) str += '.'
+                }
+                held.push(str)
+            }
+
+            const required = new Array()
+            for (var i = 0; i < 100; i++) {
+                var str = ''
+                const r = _.random(5, 10)
+                for (var j = 0; j < r; j++) {
+                    str += randomString(_.random(4, 32))
+                    if (j + 1 < r) str += '.'
+                }
+                required.push(str)
+            }
+
+            const heldFlags = flagArray(held)
+            const reqFlags = flagArray(required)
+            assert.ok(!hasAll(reqFlags, heldFlags))
+        })
+    })
+
 })

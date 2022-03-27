@@ -1,9 +1,12 @@
 import express from 'express';
-import { checkSchema } from 'express-validator';
+import { body, query } from 'express-validator';
 import sanitize from 'mongo-sanitize';
 import { Permission } from '../schemas/PermissionSchema.js';
 import { Document, Types } from 'mongoose';
 import { stringToObjectIdArray, unique } from '../utils.js';
+import { User, UserEntry } from '../schemas/UserSchema.js';
+import { has, hasAll, flagArray, flattenUser, flattenRole } from '../permission.js';
+import { Role, RoleEntry } from '../schemas/RoleSchema.js';
 
 const PermissionRouter = express.Router();
 
@@ -59,58 +62,56 @@ PermissionRouter.delete('/:permissionId', getPermission, async (req, res) => {
 
 });
 
-PermissionRouter.post('/create', async (req, res) => {
+interface NewPermission {
+    name: string;
+    description: string;
+    flag: string;
+}
 
-    const { name, description, key, path } = req.body;
+PermissionRouter.post('/create',
+    body('name').exists().isString().isLength({ min: 1 }),
+    body('description').exists().isString().isLength({ min: 1 }),
+    body('flag').exists().isString().matches(/[a-z]+´(\.[a-z])*/),
+    async (req, res) => {
 
-    if (!name || name.length == 0) return res.status(400).send('missing name');
+        const { name, description, flag } = req.body as NewPermission;
+        const lastIndex = flag.lastIndexOf('.');
+        const key = flag.slice(lastIndex);
+        const path = flag.slice(0, Math.max(lastIndex, 0));
 
-    if (!description) return res.status(400).send('missing description');
+        const permission = new Permission({
+            name: name,
+            description: description,
+            key: key,
+            path: path,
+            fullPath: flag
+        });
 
-    if (!key || key.length == 0) return res.status(400).send('missing key');
+        const op = await permission.save();
+        if (!op) return res.sendStatus(500);
+        res.send(op);
 
-    if (!path || path.length == 0) return res.status(400).send('missing path');
-
-    const permission = new Permission({
-        name: name,
-        description: description,
-        key: key,
-        path: path,
-        fullPath: `${path}.${key}`
     });
 
-    const op = await permission.save();
+PermissionRouter.get('/list',
+    query('page').optional().isInt({ min: 0 }).default(0),
+    query('limit').optional().isInt({ min: 1, max: 100 }).default(100),
+    async (req, res) => {
 
-    if (!op) return res.sendStatus(500);
+        const { page, limit } = req.query as { page: number, limit: number; };
 
-    res.send(op);
+        let query = Permission.find();
+        if (limit) {
+            query = query.limit(limit);
+            if (page > 0)
+                query = query.skip(page * limit);
+        }
 
-});
+        const op = await query;
+        if (!op) return res.sendStatus(500);
+        res.send(op);
 
-PermissionRouter.get('/list', async (req, res) => {
-
-    const page = parseInt(req.query.page as string) || 0;
-    const limit = parseInt(req.query.limit as string) || undefined;
-
-    if (isNaN(page)) return res.status(400).send('page NaN');
-    else if (limit && isNaN(limit)) res.status(400).send('limit NaN');
-    else if (page < 0) return res.status(400).send('page negative');
-    else if (limit && limit < 1) return res.status(400).send('limit < 1');
-
-    let query = Permission.find();
-    if (limit) {
-        query = query.limit(limit);
-        if (page > 0)
-            query = query.skip(page * limit);
-    }
-
-    const op = await query;
-
-    if (!op) return res.sendStatus(500);
-
-    res.send(op);
-
-});
+    });
 
 PermissionRouter.post('/update', getPermissionBody, async (req, res) => {
 
@@ -135,5 +136,40 @@ PermissionRouter.post('/update', getPermissionBody, async (req, res) => {
     res.send(op);
 
 });
+
+interface CheckRequest {
+    type: 'user' | 'role';
+    id: string;
+    required: Array<string>;
+    additional: Array<string>;
+    includeMissing: boolean;
+}
+
+PermissionRouter.post('/has',
+    body('type').isIn(['user', 'role']),
+    body('id').exists().matches(/[0-9a-f]{12,24}/),
+    body('required').exists().isArray({ min: 1 }),
+    body('additional').optional().isArray().default([]),
+    body('includeMissing').optional().isBoolean().default(false),
+    async (req, res) => {
+
+        const request = req.body as CheckRequest;
+        const subject = request.type == 'user' ? await User.findById(request.id) : await Role.findById(request.id);
+
+        if (!subject) return res.status(404).send(`${request.type} not found`);
+
+        const flags = (subject instanceof User) ? await flattenUser(subject as UserEntry) : flattenRole(subject as RoleEntry);
+
+        try {
+            const required = flagArray(request.required, false, true);
+            const additional = flagArray(request.additional, false, true);
+            const result = hasAll(required, flags.concat(additional), request.includeMissing);
+
+            return res.status(200).send(result);
+        } catch (e) {
+            return res.send(400).send('invalid permission flags');
+        }
+
+    });
 
 export { PermissionRouter };

@@ -1,4 +1,4 @@
-import mongoose, { Types, Schema } from 'mongoose';
+import mongoose, { Document, Types, Schema } from 'mongoose';
 import { REFS } from './refs.js';
 
 /**
@@ -20,6 +20,8 @@ interface Role {
     creator: Types.ObjectId;
 }
 
+type RoleEntry = Document<unknown, any, Role> & Role & { _id: Types.ObjectId; };
+
 const RoleSchema = new Schema<Role>({
     _id: {
         type: Schema.Types.ObjectId,
@@ -37,4 +39,4 @@ const RoleSchema = new Schema<Role>({
 
 const Role = mongoose.model<Role>(REFS.ROLE, RoleSchema);
 
-export { Role };
+export { Role, RoleEntry };

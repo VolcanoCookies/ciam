@@ -1,0 +1,343 @@
+openapi: '3.0.2'
+info:
+  title: Collective IAM
+  version: '1.0.0'
+servers:
+  - url: https://ciam.centralmind.net
+
+paths:
+  /role/{roleId}:
+    get:
+      description: 'Get a role'
+      parameters:
+        - in: path
+          name: roleId
+          required: true
+          schema:
+            type: string
+          description: 'The role ID'
+      responses:
+        '200':
+          description: 'Returns the role'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '404':
+          description: 'Role not found'
+
+    delete:
+      description: 'Delete a role'
+      parameters:
+        - in: path
+          name: roleId
+          required: true
+          schema:
+            type: string
+          description: 'The role ID'
+      responses:
+        '200':
+          description: 'Returns the deleted role'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '404':
+          description: 'Role not found'
+
+  /role/create:
+    post:
+      requestBody:
+        description: 'The role to create, only name and description'
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 'The name of this role'
+                description:
+                  type: string
+                  description: 'The description of this role'
+      responses:
+        '200':
+          description: 'Returns the newly created role'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          description: 'Name or description was missing'
+
+  /permission:
+    get:
+      summary: 'Get a permission'
+      description: 'Get a permission flag'
+      parameters:
+        - in: path
+          name: permissionId
+          required: true
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+          description: 'The id of this permission'
+      responses:
+        '200':
+          description: 'Returns the permission'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '404':
+          description: 'Permission not found'
+
+    delete:
+      summary: 'Delete a permission'
+      description: 'Delete a permission flag'
+      parameters:
+        - in: path
+          name: permissionId
+          required: true
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+          description: 'The id of this permission'
+      responses:
+        '200':
+          description: 'Returns the deleted permission'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '404':
+          description: 'Permission not found'
+
+  /permission/create:
+    post:
+      summary: 'Create a permission'
+      requestBody:
+        description: 'The permission to create, _id and fullPath field is ignored'
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 'A pretty name for this permission'
+                description:
+                  type: string
+                  description: 'A description for this permission flag'
+                flag:
+                  type: string
+                  pattern: '[a-z]+(\.[a-z])*'
+                  description: 'The permission flag to create, special key are not allowed for creating permissions'
+      responses:
+        '200':
+          description: 'Returns the newly created permission'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '400':
+          description: 'Bad request'
+        '500':
+          description: 'Error when saving the permission to the database'
+
+  /permission/list:
+    get:
+      summary: 'List permissions'
+      description: 'Lets you list permissions. Limit and page query parameters lets you easily paginate.'
+      parameters:
+        - in: query
+          name: page
+          description: 'Only works if limit is also provided, skips the page * limit first permissions'
+          required: false
+          schema:
+            type: number
+        - in: query
+          name: limit
+          description: 'Limit the amount of permissions to send back'
+          required: false
+          schema:
+            type: number
+      responses:
+        '200':
+          description: 'Returns the newly created permission'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '400':
+          description: 'Bad request'
+        '500':
+          description: 'Error when getting the permissions from the database'
+
+  /permission/has:
+    post:
+      summary: 'Check permissions'
+      description: 'Check if a user or role has the provided permissions.'
+      requestBody:
+        description: 'The permission check to perform'
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckRequest'
+      responses:
+        '200':
+          description: 'Returns a result of doing this permission check'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckResult'
+        '400':
+          description: 'Bad request'
+        '404':
+          description: 'Entity specified by id field was not found'
+
+components:
+  schemas:
+    ObjectId:
+      type: string
+      minLength: 12
+      maxLength: 24
+      pattern: '^[0-9a-f]+$'
+    Flag:
+      type: string
+      minLength: 1
+      pattern: '^(?:([a-z]+|\?)(?:\.(?:[a-z]+|\?))*(\.\*)?|\*)$'
+    Role:
+      type: object
+      description: 'A role is a collection of permission flags, and can be assigned to users'
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+          description: 'The roles ID, no tthe same as a discord ID'
+        name:
+          type: string
+          description: 'The name of the role'
+        description:
+          type: string
+          description: 'A description of this role'
+        permissions:
+          type: array
+          description: 'A list of all the permission flags this role has'
+          items:
+            $ref: '#/components/schemas/Flag'
+        creator:
+          type: string
+          description: 'The user id of the user who created this role'
+      required:
+        - _id
+        - name
+        - description
+        - permissions
+        - creator
+    User:
+      type: object
+      description: 'A user can have both permissions and roles, and can be tied to a discord user, or be standalone'
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+          description: 'The users ID, not the same as a discord ID'
+        name:
+          type: string
+          description: 'The name of this user'
+        avatar:
+          type: string
+          description: 'Avatar url'
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ObjectId'
+          description: 'List of role ids this user has'
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Flag'
+          description: 'List of permission flags this user has'
+      required:
+        - _id
+        - name
+        - avatar
+        - roles
+        - permissions
+    Permission:
+      type: object
+      description: 'A permission has a string flag, and a description'
+      properties:
+        name:
+          type: string
+          description: 'A pretty name for a description'
+        description:
+          type: string
+          description: 'A description for this specific permission flag'
+        key:
+          type: string
+          description: 'The last path in this permission flag, this is what the description is actually describing'
+        path:
+          type: array
+          items:
+            type: string
+          description: 'The path to this permission key'
+        fullPath:
+          type: string
+          description: 'The path and key combined'
+        creator:
+          $ref: '#/components/schemas/ObjectId'
+          description: 'The user who created this permission'
+      required:
+        - name
+        - description
+        - key
+        - path
+        - fullPath
+        - creator
+    CheckResult:
+      type: object
+      description: 'The result of checking permissions'
+      properties:
+        passed:
+          type: boolean
+          description: 'If the permission check passed. True if the user/role had all the required permissions.'
+        missing:
+          type: array
+          items:
+            $ref: '#/components/schemas/Flag'
+          description: 'The missing permissions that the user/role did not have, only present if specified in the request.'
+      required:
+        - passed
+    CheckRequest:
+      type: object
+      description: 'A request to check permissions'
+      properties:
+        type:
+          type: string
+          pattern: 'user|role|discord'
+          description: 'Specify what sort of id the id field refers to'
+        id:
+          oneOf:
+            - $ref: '#/components/schemas/ObjectId'
+            - type: string
+          description: 'The id of the entity to check permissions for'
+        required:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Flag'
+          description: 'The required flags that this entity has to have'
+        additional:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Flag'
+          description: 'Additional flags that the entity will have when checking'
+        includeMissing:
+          type: boolean
+          description: 'If the response should include all the flags that the entity did not have from the required flags'
+      required:
+        - type
+        - id
+        - required
