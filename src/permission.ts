@@ -124,11 +124,6 @@ function flattenRole(role: Role): Array<Flag> {
 	return _.uniq(flags);
 }
 
-async function hasPermissions(subject: (Document<User> & User) | (Document<Role> & Role), required: Array<Flag>): Promise<boolean> {
-	const permissions = subject instanceof User ? await flattenUser(subject as Document<User> & User) : flattenRole(subject as Document<Role> & Role);
-	return hasAll(_.uniq(required), permissions);
-}
-
 function flagArray(perms: Array<string>, ignoreInvalid: boolean = false, removeDuplicate: boolean = true): Array<Flag> {
 	const valid = new Array<Flag>();
 	for (const p of perms) {
@@ -143,4 +138,4 @@ function flagArray(perms: Array<string>, ignoreInvalid: boolean = false, removeD
 	return removeDuplicate ? _.uniq(valid) : valid;
 }
 
-export { Flag, has, hasAll, validFlag, flattenUser, flattenRole, hasPermissions, flagArray };
+export { Flag, has, hasAll, validFlag, flattenUser, flattenRole, flagArray };
