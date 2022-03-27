@@ -30,7 +30,7 @@ const PermissionSchema = new Schema<Permission>({
     key: String,
     path: String,
     fullPath: {
-        type: [String],
+        type: String,
         index: true,
         unique: true
     },
