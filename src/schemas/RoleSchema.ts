@@ -1,5 +1,7 @@
-import mongoose, { Document, Types, Schema } from 'mongoose';
+import mongoose, { Document, Types } from 'mongoose';
 import { REFS } from './refs.js';
+
+const Schema = mongoose.Schema;
 
 /**
  * A role is an abstract grouping of permissions, it can be assigned to users or inherited by other roles.
