@@ -142,7 +142,7 @@ function flattenRole(role: RoleEntry): Array<Flag> {
 	return _.uniq(flags);
 }
 
-function flagArray(perms: Array<string>, ignoreInvalid: boolean = false, removeDuplicate: boolean = true): Array<Flag> {
+function flagArray(perms: Array<string | Flag>, ignoreInvalid: boolean = false, removeDuplicate: boolean = true): Array<Flag> {
 	const valid = new Array<Flag>();
 	for (const p of perms) {
 		if (ignoreInvalid) {
