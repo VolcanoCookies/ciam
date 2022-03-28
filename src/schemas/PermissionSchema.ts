@@ -1,5 +1,7 @@
-import mongoose, { Types, Schema } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { REFS } from './refs.js';
+
+const Schema = mongoose.Schema;
 
 /**
  * A permission is just a label which other applications can use to determine if a user is allowed to do something
@@ -15,7 +17,7 @@ interface Permission {
     // The path for this permission, for example 'ciam.roles', meant to be used as a scope
     path: string,
     // Full path of this permission, used to prevent identical permissions, consists of: 'path.key'
-    fullPath: {
+    flag: {
         type: String,
         index: true,
         unique: true;
@@ -29,7 +31,7 @@ const PermissionSchema = new Schema<Permission>({
     description: String,
     key: String,
     path: String,
-    fullPath: {
+    flag: {
         type: String,
         index: true,
         unique: true
