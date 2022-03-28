@@ -1,7 +1,7 @@
 import express from 'express';
-import jsonwebtoken from 'jsonwebtoken';
-import { User, UserEntry } from '../schemas/UserSchema.js';
+import { User } from '../schemas/UserSchema.js';
 import fetch from 'node-fetch';
+import { createToken } from '../utils.js';
 
 const AuthRouter = express.Router();
 // Our own url, used for redirecting
@@ -26,11 +26,6 @@ interface SSOResponse {
     originalUrl: string;
 }
 
-enum TokenType {
-    USER = 0,
-    BOT = 1
-}
-
 AuthRouter.get('/login', (req, res) => {
     return res.redirect(`https://sso.isan.to/login?service=${__url}/callback`);
 });
@@ -49,16 +44,7 @@ AuthRouter.get('/callback', async (req, res) => {
 
     if (!user) return res.sendStatus(401);
 
-    const payload = {
-        id: user._id,
-        type: TokenType.USER
-    };
-
-    const token = jsonwebtoken.sign(payload, secret, {
-        issuer: __url
-    });
-
-    res.send(token);
+    res.send(createToken(user));
 });
 
 export { AuthRouter };
