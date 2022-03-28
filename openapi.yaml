@@ -73,15 +73,17 @@ paths:
 
   /permission:
     get:
+      security:
+        - bearerAuth: ['ciam.permission.get.{FLAG}']
       summary: 'Get a permission'
       description: 'Get a permission flag'
       parameters:
         - in: path
-          name: permissionId
+          name: flag
           required: true
           schema:
-            $ref: '#/components/schemas/ObjectId'
-          description: 'The id of this permission'
+            $ref: '#/components/schemas/Flag'
+          description: 'The flag to find'
       responses:
         '200':
           description: 'Returns the permission'
@@ -93,6 +95,8 @@ paths:
           description: 'Permission not found'
 
     delete:
+      security:
+        - bearerAuth: ['ciam.permission.delete.{FLAG}']
       summary: 'Delete a permission'
       description: 'Delete a permission flag'
       parameters:
@@ -114,6 +118,8 @@ paths:
 
   /permission/create:
     post:
+      security:
+        - bearerAuth: ['ciam.permission.create.{FLAG}']
       summary: 'Create a permission'
       requestBody:
         description: 'The permission to create, _id and fullPath field is ignored'
@@ -176,8 +182,10 @@ paths:
 
   /permission/has:
     post:
+      security:
+        - bearerAuth: ['ciam.permission.has.{ALL_REQUIRED_PERMISSIONS}']
       summary: 'Check permissions'
-      description: 'Check if a user or role has the provided permissions.'
+      description: 'Check if a user or role has the provided permissions.<br>test'
       requestBody:
         description: 'The permission check to perform'
         required: true
@@ -198,6 +206,11 @@ paths:
           description: 'Entity specified by id field was not found'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     ObjectId:
       type: string

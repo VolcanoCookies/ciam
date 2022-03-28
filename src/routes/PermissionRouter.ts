@@ -1,29 +1,27 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { body, query } from 'express-validator';
 import sanitize from 'mongo-sanitize';
 import { Permission } from '../schemas/PermissionSchema.js';
 import { Document, Types } from 'mongoose';
 import { stringToObjectIdArray, unique } from '../utils.js';
 import { User, UserEntry } from '../schemas/UserSchema.js';
-import { has, hasAll, flagArray, flattenUser, flattenRole } from '../permission.js';
+import { Flag, hasAll, flagArray, flattenUser, flattenRole, checkPermissions } from '../permission.js';
 import { Role, RoleEntry } from '../schemas/RoleSchema.js';
 
 const PermissionRouter = express.Router();
 
 const getPermission = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const flag = sanitize(req.params.flag);
 
-    const permissionId = sanitize(req.params.roleId);
+    if (!flag) return res.status(400).send(`Permission ${flag} not found.`);
 
-    if (!permissionId) return res.status(400).send(`Permission ${permissionId} not found.`);
+    const permission = await Permission.findById(flag);
 
-    const permission = await Permission.findById(permissionId);
-
-    if (!permission) return res.status(400).send(`Permission ${permissionId} not found.`);
+    if (!permission) return res.status(400).send(`Permission ${flag} not found.`);
 
     req.body.permission = permission;
 
     next();
-
 };
 
 const getPermissionBody = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -48,20 +46,6 @@ PermissionRouter.use((req, res, next) => {
     next();
 });
 
-PermissionRouter.get('/:permissionId', getPermission, async (req, res) => {
-    res.send(req.body.permission);
-});
-
-PermissionRouter.delete('/:permissionId', getPermission, async (req, res) => {
-
-    const op = await req.body.permission.delete();
-
-    if (!op) return res.status(500).send(`Permission ${req.body.permission._id} could not be deleted.`);
-
-    res.send(op);
-
-});
-
 interface NewPermission {
     name: string;
     description: string;
@@ -72,19 +56,20 @@ PermissionRouter.post('/create',
     body('name').exists().isString().isLength({ min: 1 }),
     body('description').exists().isString().isLength({ min: 1 }),
     body('flag').exists().isString().matches(/[a-z]+´(\.[a-z])*/),
-    async (req, res) => {
-
+    async (req: Request, res: Response) => {
         const { name, description, flag } = req.body as NewPermission;
         const lastIndex = flag.lastIndexOf('.');
         const key = flag.slice(lastIndex);
         const path = flag.slice(0, Math.max(lastIndex, 0));
+
+        if (!checkPermissions(req, `ciam.permission.create.${flag}`)) return res.sendStatus(401);
 
         const permission = new Permission({
             name: name,
             description: description,
             key: key,
             path: path,
-            fullPath: flag
+            flag: flag
         });
 
         const op = await permission.save();
@@ -93,6 +78,7 @@ PermissionRouter.post('/create',
 
     });
 
+// TODO: Check permissions
 PermissionRouter.get('/list',
     query('page').optional().isInt({ min: 0 }).default(0),
     query('limit').optional().isInt({ min: 1, max: 100 }).default(100),
@@ -113,6 +99,7 @@ PermissionRouter.get('/list',
 
     });
 
+// TODO: Check permissions
 PermissionRouter.post('/update', getPermissionBody, async (req, res) => {
 
     const permission: Document<Permission> & Permission = req.body.permission;
@@ -151,8 +138,7 @@ PermissionRouter.post('/has',
     body('required').exists().isArray({ min: 1 }),
     body('additional').optional().isArray().default([]),
     body('includeMissing').optional().isBoolean().default(false),
-    async (req, res) => {
-
+    async (req: Request, res: Response) => {
         const request = req.body as CheckRequest;
         const subject = request.type == 'user' ? await User.findById(request.id) : await Role.findById(request.id);
 
@@ -162,6 +148,9 @@ PermissionRouter.post('/has',
 
         try {
             const required = flagArray(request.required, false, true);
+            const checkCanCheck = required.map(r => `ciam.permissions.has.${r}`);
+            if (!checkPermissions(req, ...checkCanCheck)) return res.sendStatus(401);
+
             const additional = flagArray(request.additional, false, true);
             const result = hasAll(required, flags.concat(additional), request.includeMissing);
 
@@ -171,5 +160,17 @@ PermissionRouter.post('/has',
         }
 
     });
+
+PermissionRouter.get('/:flag', getPermission, async (req: Request, res: Response) => {
+    if (!checkPermissions(req, `ciam.permission.get.${req.body.permission}`)) return res.sendStatus(401);
+    res.send(req.body.permission);
+});
+
+PermissionRouter.delete('/:flag', getPermission, async (req, res) => {
+    if (!checkPermissions(req, `ciam.permission.get.${req.body.permission.flag}`)) return res.sendStatus(401);
+    const op = await req.body.permission.delete();
+    if (!op) return res.status(500).send(`Permission ${req.body.permission.flag} could not be deleted.`);
+    res.send(op);
+});
 
 export { PermissionRouter };
