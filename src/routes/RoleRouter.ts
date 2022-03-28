@@ -1,5 +1,5 @@
 import express from 'express';
-import { checkSchema } from 'express-validator';
+import { checkSchema, query } from 'express-validator';
 import sanitize from 'mongo-sanitize';
 import { Role } from '../schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
@@ -46,22 +46,6 @@ RoleRouter.use((req, res, next) => {
     next();
 });
 
-RoleRouter.get('/:roleId', getRole, async (req, res) => {
-
-    res.send(req.body.role);
-
-});
-
-RoleRouter.delete('/:roleId', getRole, async (req, res) => {
-
-    const op = await req.body.role.delete();
-
-    if (!op) return res.status(404).send(`Role ${req.body.role._id} could not be deleted.`);
-
-    res.send(op);
-
-});
-
 RoleRouter.post('/create', async (req, res) => {
 
     const { name, description } = req.body;
@@ -83,30 +67,27 @@ RoleRouter.post('/create', async (req, res) => {
 
 });
 
-RoleRouter.get('/list', async (req, res) => {
+RoleRouter.get('/list',
+    query('page').isInt({ min: 0 }).default(0),
+    query('limit').isInt({ min: 1, max: 100 }).default(100),
+    async (req, res) => {
 
-    const page = parseInt(req.query.page as string) || 0;
-    const limit = parseInt(req.query.limit as string) || undefined;
+        const { page, limit } = req.query as { page: number, limit: number; };
 
-    if (isNaN(page)) return res.status(400).send('page NaN');
-    else if (limit && isNaN(limit)) res.status(400).send('limit NaN');
-    else if (page < 0) return res.status(400).send('page negative');
-    else if (limit && limit < 1) return res.status(400).send('limit < 1');
+        let query = Role.find();
+        if (limit) {
+            query = query.limit(limit);
+            if (page > 0)
+                query = query.skip(page * limit);
+        }
 
-    let query = Role.find();
-    if (limit) {
-        query = query.limit(limit);
-        if (page > 0)
-            query = query.skip(page * limit);
-    }
+        const op = await query.exec();
 
-    const op = await query;
+        if (!op) return res.sendStatus(500);
 
-    if (!op) return res.sendStatus(500);
+        res.send(op);
 
-    res.send(op);
-
-});
+    });
 
 RoleRouter.post('/update', getRoleBody, async (req, res) => {
 
@@ -142,6 +123,20 @@ RoleRouter.post('/update', getRoleBody, async (req, res) => {
     const op = await role.save();
 
     if (!op) return res.sendStatus(500);
+
+    res.send(op);
+
+});
+
+RoleRouter.get('/:roleId', getRole, async (req, res) => {
+    res.send(req.body.role);
+});
+
+RoleRouter.delete('/:roleId', getRole, async (req, res) => {
+
+    const op = await req.body.role.delete();
+
+    if (!op) return res.status(404).send(`Role ${req.body.role._id} could not be deleted.`);
 
     res.send(op);
 
