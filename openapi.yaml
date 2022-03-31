@@ -8,13 +8,16 @@ servers:
 paths:
   /role/{roleId}:
     get:
-      description: 'Get a role'
+      summary: 'Get a role'
+      description: 'Get a role by its roleId'
+      security:
+        - bearerAuth: ['ciam.role.get.{ROLE_ID}']
       parameters:
         - in: path
           name: roleId
           required: true
           schema:
-            type: string
+            $ref: '#/components/schemas/ObjectId'
           description: 'The role ID'
       responses:
         '200':
@@ -23,17 +26,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Role'
+        '401':
+          description: 'Invalid token or missing permissions'
         '404':
           description: 'Role not found'
 
     delete:
-      description: 'Delete a role'
+      summary: 'Delete a role'
+      description: 'Delete a role by its role ID'
+      security:
+        - bearerAuth: ['ciam.role.delete.{ROLE_ID}']
       parameters:
         - in: path
           name: roleId
           required: true
           schema:
-            type: string
+            $ref: '#/components/schemas/ObjectId'
           description: 'The role ID'
       responses:
         '200':
@@ -42,11 +50,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Role'
+        '401':
+          description: 'Invalid token or missing permissions'
         '404':
           description: 'Role not found'
 
   /role/create:
     post:
+      summary: 'Create a role'
+      security:
+        - bearerAuth: ['ciam.role.create']
       requestBody:
         description: 'The role to create, only name and description'
         required: true
@@ -61,6 +74,14 @@ paths:
                 description:
                   type: string
                   description: 'The description of this role'
+                permissions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Flag'
+                  description: 'The permissions of this role'
+              required:
+                - name
+                - description
       responses:
         '200':
           description: 'Returns the newly created role'
@@ -69,9 +90,91 @@ paths:
               schema:
                 $ref: '#/components/schemas/Role'
         '400':
-          description: 'Name or description was missing'
+          description: 'Invalid body'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '500':
+          description: 'Failed saving role to database'
 
-  /permission:
+  /role/update:
+    post:
+      summary: 'Update a role'
+      security:
+        - bearerAuth: ['ciam.role.update.{ROLE_ID}']
+      requestBody:
+        description: 'The role to update, omitted fields wont be updated'
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 'New name of this role'
+                description:
+                  type: string
+                  description: 'New description of this role'
+                permissions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Flag'
+                  description: 'New permissions of this role'
+      responses:
+        '200':
+          description: 'Returns the updated role'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '400':
+          description: 'Invalid body'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '404':
+          description: 'Role not found'
+        '500':
+          description: 'Failed saving role to database'
+
+  /role/list:
+    get:
+      summary: 'List roles'
+      description: 'Get a list of all roles'
+      security:
+        - bearerAuth: ['ciam.role.list']
+      parameters:
+        - in: query
+          name: skip
+          description: 'Number of roles to skip'
+          required: false
+          schema:
+            type: number
+            minimum: 0
+        - in: query
+          name: limit
+          description: 'Maximum amount of roles to return'
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: 'Returns the roles'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '401':
+          description: 'Invalid query parameters'
+        '500':
+          description: 'Failed listing roles'
+
+  # Continue from here
+
+  /permission/{flag}:
     get:
       security:
         - bearerAuth: ['ciam.permission.get.{FLAG}']
@@ -101,10 +204,10 @@ paths:
       description: 'Delete a permission flag'
       parameters:
         - in: path
-          name: permissionId
+          name: flag
           required: true
           schema:
-            $ref: '#/components/schemas/ObjectId'
+            $ref: '#/components/schemas/Flag'
           description: 'The id of this permission'
       responses:
         '200':
@@ -115,6 +218,8 @@ paths:
                 $ref: '#/components/schemas/Permission'
         '404':
           description: 'Permission not found'
+        '401':
+          description: 'Missing permissions'
 
   /permission/create:
     post:
@@ -122,7 +227,7 @@ paths:
         - bearerAuth: ['ciam.permission.create.{FLAG}']
       summary: 'Create a permission'
       requestBody:
-        description: 'The permission to create, _id and fullPath field is ignored'
+        description: 'The permission to create, a partial of the Permission object'
         required: true
         content:
           application/json:
@@ -151,34 +256,116 @@ paths:
         '500':
           description: 'Error when saving the permission to the database'
 
-  /permission/list:
+  /permissions/me:
     get:
-      summary: 'List permissions'
-      description: 'Lets you list permissions. Limit and page query parameters lets you easily paginate.'
+      security:
+        - bearerAuth: ['ciam.permission.me']
+      summary: 'Own permissions'
+      description: 'Get your own permissions. Limit and page query parameters lets you easily paginate.'
       parameters:
         - in: query
-          name: page
-          description: 'Only works if limit is also provided, skips the page * limit first permissions'
+          name: skip
+          description: 'Number of permissions to skip'
           required: false
           schema:
             type: number
         - in: query
           name: limit
-          description: 'Limit the amount of permissions to send back'
+          description: 'Maximum amount of permissions to return'
           required: false
           schema:
             type: number
       responses:
         '200':
-          description: 'Returns the newly created permission'
+          description: 'All your permissions'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Permission'
         '400':
           description: 'Bad request'
+        '401':
+          description: 'Invalid token or missing permissions'
         '500':
           description: 'Error when getting the permissions from the database'
+
+  /permission/list:
+    get:
+      security:
+        - bearerAuth: ['ciam.permission.list.{SEARCH}']
+      summary: 'List permissions'
+      description: 'Lets you list permissions. Limit and page query parameters lets you easily paginate.'
+      parameters:
+        - in: query
+          name: skip
+          description: 'Number of permissions to skip'
+          required: false
+          schema:
+            type: number
+            minimum: 0
+        - in: query
+          name: limit
+          description: 'Maximum amount of permissions to return'
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: search
+          description: 'Return all flags that match this flag, wildcards included.'
+          required: true
+          schema:
+            $ref: '#/components/schemas/Flag'
+      responses:
+        '200':
+          description: 'All the permissions that matched the search query'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '400':
+          description: 'Bad request'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '500':
+          description: 'Error when getting the permissions from the database'
+
+  /permission/update:
+    post:
+      security:
+        - bearerAuth: ['ciam.permission.update.{FLAG}']
+      summary: 'Create a role'
+      requestBody:
+        description: 'The role to create, only name and description'
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                flag:
+                  $ref: '#/components/schemas/FlagStrict'
+                  description: 'The flag to update, fails if this flag does not exist'
+                name:
+                  type: string
+                  description: 'The new pretty name of this flag'
+                description:
+                  type: string
+                  description: 'The new description of this flag'
+              required:
+                - flag
+      responses:
+        '200':
+          description: 'The now modified permission'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '400':
+          description: 'Flag was missing'
+        '401':
+          description: 'Invalid token or missing permissions'
 
   /permission/has:
     post:
@@ -205,6 +392,129 @@ paths:
         '404':
           description: 'Entity specified by id field was not found'
 
+  /user/create:
+    post:
+      security:
+        - bearerAuth: ['ciam.user.create', '{PERMISSIONS}']
+      summary: 'Create a user'
+      description: 'If any permissions are given, will have to have all those permissions'
+      requestBody:
+        description: 'The user to create'
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 'The name of this user'
+                roles:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ObjectId'
+                  description: 'The role ids this user has'
+                permissions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Flag'
+                  description: 'The permission flags this user has'
+                discord:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: 'User discord id'
+              required:
+                - name
+      responses:
+        '200':
+          description: 'Returns the newly created user'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: 'Name was missing'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '500':
+          description: 'Failed saving user to database'
+
+  /user/token/{userId}:
+    get:
+      summary: 'Get a token'
+      description: 'Get a users ciam api token'
+      security:
+        - bearerAuth: ['ciam.user.get.token.{USER_ID}']
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: 'The user ID'
+      responses:
+        '200':
+          description: 'Returns the user token'
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          description: 'Invalid token or missing permissions'
+        '404':
+          description: 'User not found'
+
+  /user/{userId}:
+    get:
+      summary: 'Get a user'
+      description: 'Get a user by its userId'
+      security:
+        - bearerAuth: ['ciam.user.get.{USER_ID}']
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: 'The user ID'
+      responses:
+        '200':
+          description: 'Returns the user'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '404':
+          description: 'User not found'
+
+    delete:
+      summary: 'Delete a user'
+      description: 'Delete a user by its userId'
+      security:
+        - bearerAuth: ['ciam.user.delete.{USER_ID}']
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: 'The user ID'
+      responses:
+        '200':
+          description: 'Returns the deleted user'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '404':
+          description: 'User not found'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -220,7 +530,11 @@ components:
     Flag:
       type: string
       minLength: 1
-      pattern: '^(?:([a-z]+|\?)(?:\.(?:[a-z]+|\?))*(\.\*)?|\*)$'
+      pattern: '^(([a-z]+|\?)(\.([a-z]+|\?))*(\.\*)?)|\*$'
+    FlagStrict:
+      type: string
+      minLength: 1
+      pattern: '^[a-z0-9]+(\.[a-z0-9]+)*$'
     Role:
       type: object
       description: 'A role is a collection of permission flags, and can be assigned to users'
