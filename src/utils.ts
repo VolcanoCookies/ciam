@@ -2,15 +2,13 @@ import mongoose from 'mongoose';
 import { User } from './schemas/UserSchema.js';
 import jsonwebtoken from 'jsonwebtoken';
 
-const Types = mongoose.Types;
+function stringToObjectIdArray(arr: Array<string>): Array<mongoose.Types.ObjectId> {
 
-function stringToObjectIdArray(arr: Array<string>): Array<Types.ObjectId> {
-
-    const final = new Array<Types.ObjectId>();
+    const final = new Array<mongoose.Types.ObjectId>();
 
     for (const s of arr) {
         try {
-            const o = new Types.ObjectId(s);
+            const o = new mongoose.Types.ObjectId(s);
             final.push(o);
         } catch (e) { }
     }
@@ -43,4 +41,6 @@ function createToken(user: User): string {
     return token as string;
 };
 
-export { stringToObjectIdArray, unique, createToken };
+const objectIdRegex = /[a-f0-9]{24}/;
+
+export { stringToObjectIdArray, unique, createToken, objectIdRegex };

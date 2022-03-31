@@ -44,7 +44,6 @@ const DiscordUserSchema = new Schema<DiscordUser>({
 });
 
 const UserSchema = new Schema<User>({
-    _id: Schema.Types.ObjectId,
     discord: {
         type: DiscordUserSchema,
         optional: true

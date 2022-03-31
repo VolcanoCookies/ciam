@@ -1,8 +1,9 @@
 import { User, UserEntry } from './schemas/UserSchema.js';
 import { Role, RoleEntry } from './schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
-import { REFS } from './schemas/refs.js';
 import _ from 'lodash';
+import { Request, Response, NextFunction } from 'express';
+import { Check } from 'ciam-commons';
 
 /**
  * Rules for permissions:
@@ -20,32 +21,39 @@ import _ from 'lodash';
 
 // Our lord an savior Ash has come to bless us
 class Flag extends String {
-	isWildcard: boolean;
-	keys: Array<string>;
+    isWildcard: boolean;
+    keys: Array<string>;
 
-	constructor(value: string) {
-		if (!validFlag(value)) throw new Error(`Invalid permission flag ${value}`);
-		super(value);
+    constructor(value: string) {
+        if (!validFlag(value)) throw new Error(`Invalid permission flag ${value}`);
+        super(value);
 
-		this.isWildcard = value == '*' || value.endsWith('.*');
-		this.keys = value.split('.');
-	}
+        this.isWildcard = value == '*' || value.endsWith('.*');
+        this.keys = value.split('.');
+    }
 
-	public static validate(value: string | Flag): Flag {
-		if (!(value instanceof Flag)) {
-			return new Flag(value);
-		}
-		return value;
-	}
+    public static validate(value: string | Flag): Flag {
+        if (!(value instanceof Flag)) {
+            return new Flag(value);
+        }
+        return value;
+    }
 
-	equals(other: Flag): boolean {
-		return this.toString() == other.toString();
-	}
+    equals(other: Flag): boolean {
+        return this.toString() == other.toString();
+    }
 }
 
 interface CheckResult {
-	passed: boolean;
-	missing: Array<Flag> | undefined;
+    passed: boolean;
+    missing: Array<Flag> | undefined;
+}
+
+class PermissionError extends Error {
+    constructor(missing: Array<string> | Array<Flag> | undefined) {
+        super(`Missing permissions: ${(missing || []).join(', ')}`);
+        this.name = 'PermissionError';
+    }
 }
 
 /**
@@ -55,8 +63,13 @@ interface CheckResult {
  * @returns true if {@link perm} is a valid permission flag.
  */
 function validFlag(perm: string): boolean {
-	if (perm.length == 0) return false;
-	return perm.match(/^(?:([a-z]+|\?)(?:\.(?:[a-z]+|\?))*(\.\*)?|\*)$/) != undefined;
+    if (perm.length == 0) return false;
+    try {
+        Check.flag(perm);
+        return true;
+    } catch (err) {
+        return false;
+    }
 }
 
 /**
@@ -67,14 +80,14 @@ function validFlag(perm: string): boolean {
  * @returns true if {@link held} matches {@link required}.
  */
 function has(required: Flag, held: Flag): boolean {
-	if (required.length == 0 || held.length == 0) return false;
-	if (held.keys > required.keys) return false;
-	for (var i = 0; i < required.keys.length; i++) {
-		if (held.keys[i] == '*') return true;
-		else if (held.keys[i] == '?') continue;
-		else if (held.keys[i] != required.keys[i]) return false;
-	}
-	return true;
+    if (required.length == 0 || held.length == 0) return false;
+    if (held.keys > required.keys) return false;
+    for (var i = 0; i < required.keys.length; i++) {
+        if (held.keys[i] == '*') return true;
+        else if (held.keys[i] == '?') continue;
+        else if (held.keys[i] != required.keys[i]) return false;
+    }
+    return true;
 }
 
 /**
@@ -87,73 +100,94 @@ function has(required: Flag, held: Flag): boolean {
  * @returns true if all flags in {@link required} have at least 1 flag in {@link held} that matches.
  */
 function hasAll(required: Array<Flag>, held: Array<Flag>, returnMissing: boolean = false): CheckResult {
-	if (required.some(r => r.isWildcard)) throw new Error('Required permissions cannot have wildcards.');
-	if (returnMissing) {
-		const missing = required.filter(r => {
-			return !held.some(h => { return has(r, h); });
-		});
-		return {
-			passed: missing.length == 0,
-			missing: missing
-		};
-	} else {
-		return {
-			passed: required.every(r => {
-				return held.some(h => { return has(r, h); });
-			}),
-			missing: undefined
-		};
-	}
+    if (returnMissing) {
+        const missing = required.filter(r => {
+            return !held.some(h => { return has(r, h); });
+        });
+        return {
+            passed: missing.length == 0,
+            missing: missing
+        };
+    } else {
+        return {
+            passed: required.every(r => {
+                return held.some(h => { return has(r, h); });
+            }),
+            missing: undefined
+        };
+    }
 }
 
 async function flattenUser(user: UserEntry): Promise<Array<Flag>> {
 
-	const flags = new Array<Flag>();
+    const flags = new Array<Flag>();
 
-	user = await user.populate<{ roles: Types.Array<Role>; }>(REFS.ROLE, 'permissions');
+    user = await user.populate<{ roles: Types.Array<Role>; }>('roles', 'permissions');
 
-	user.permissions.forEach(p => {
-		try {
-			flags.push(Flag.validate(p));
-		} catch (e) { }
-	});
+    user.permissions.forEach(p => {
+        try {
+            flags.push(Flag.validate(p));
+        } catch (e) { }
+    });
 
-	user.roles.forEach(r => {
-		(<Role>r).permissions.forEach(p => {
-			try {
-				flags.push(Flag.validate(p));
-			} catch (e) { }
-		});
-	});
+    user.roles.forEach(r => {
+        (<Role>r).permissions.forEach(p => {
+            try {
+                flags.push(Flag.validate(p));
+            } catch (e) { }
+        });
+    });
 
-	return _.uniq(flags);
+    return _.uniq(flags);
 }
 
 function flattenRole(role: RoleEntry): Array<Flag> {
 
-	const flags = new Array<Flag>();
+    const flags = new Array<Flag>();
 
-	role.permissions.forEach(p => {
-		try {
-			flags.push(Flag.validate(p));
-		} catch (e) { }
-	});
+    role.permissions.forEach(p => {
+        try {
+            flags.push(Flag.validate(p));
+        } catch (e) { }
+    });
 
-	return _.uniq(flags);
+    return _.uniq(flags);
 }
 
 function flagArray(perms: Array<string | Flag>, ignoreInvalid: boolean = false, removeDuplicate: boolean = true): Array<Flag> {
-	const valid = new Array<Flag>();
-	for (const p of perms) {
-		if (ignoreInvalid) {
-			try {
-				valid.push(Flag.validate(p));
-			} catch (e) { }
-		} else {
-			valid.push(Flag.validate(p));
-		}
-	}
-	return removeDuplicate ? _.uniq(valid) : valid;
+    const valid = new Array<Flag>();
+    for (const p of perms) {
+        if (ignoreInvalid) {
+            try {
+                valid.push(Flag.validate(p));
+            } catch (e) { }
+        } else {
+            valid.push(Flag.validate(p));
+        }
+    }
+    return removeDuplicate ? _.uniq(valid) : valid;
 }
 
-export { Flag, has, hasAll, validFlag, flattenUser, flattenRole, flagArray };
+async function checkPermissions(req: any, ...required: Array<string>): Promise<CheckResult> {
+    if (!req.__cache) req.__cache = {};
+    if (!req.__cache.user) {
+        const user = await User.findById(req.user.id);
+        if (!user) throw new PermissionError(required);
+        req.__cache.user = user;
+    }
+    if (!req.__cache.flags) {
+        req.__cache.flags = await flattenUser(req.__cache.user);
+    }
+    const check = hasAll(flagArray(required), req.__cache.flags, true);
+    if (check.passed)
+        return check;
+    else
+        throw new PermissionError(check.missing);
+}
+
+// Middleware function
+const permissions = async function (req: Request, res: Response, next: NextFunction) {
+
+};
+
+export { Flag, PermissionError, has, hasAll, validFlag, flattenUser, flattenRole, flagArray, checkPermissions, permissions };

@@ -1,77 +1,42 @@
-import express from 'express';
-import { checkSchema, query } from 'express-validator';
+import express, { Request, Response, NextFunction } from 'express';
+import { body, query, param, Result } from 'express-validator';
 import sanitize from 'mongo-sanitize';
 import { Role } from '../schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
-import { stringToObjectIdArray, unique } from '../utils.js';
-import { Flag, flagArray } from '../permission.js';
+import { checkPermissions, Flag, flagArray, PermissionError } from '../permission.js';
+import { Check } from 'ciam-commons';
 
 const RoleRouter = express.Router();
 
-const getRole = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+RoleRouter.post('/create',
+    body('name').isString().notEmpty(),
+    body('description').isString().notEmpty(),
+    body('permissions').optional().isArray(),
+    async (req: Request, res: Response) => {
+        await checkPermissions(req, `ciam.role.create`);
 
-    const roleId = sanitize(req.params.roleId);
+        const { name, description, permissions } = req.body;
 
-    if (!roleId) return res.status(400).send(`Role ${roleId} not found.`);
+        const role = new Role({
+            name: name,
+            description: description,
+            permissions: permissions || [],
+            //@ts-ignore
+            creator: req.__cache.user._id
+        });
 
-    const role = await Role.findById(roleId);
-
-    if (!role) return res.status(400).send(`Role ${roleId} not found.`);
-
-    req.body.role = role;
-
-    next();
-
-};
-
-const getRoleBody = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-
-    const roleId = sanitize(req.body._id);
-
-    if (!roleId) return res.status(400).send(`Role ${roleId} not found.`);
-
-    const role = await Role.findById(roleId);
-
-    if (!role) return res.status(400).send(`Role ${roleId} not found.`);
-
-    req.body.role = role;
-
-    next();
-
-};
-
-RoleRouter.use(express.json());
-RoleRouter.use((req, res, next) => {
-    req.body = sanitize(req.body);
-    next();
-});
-
-RoleRouter.post('/create', async (req, res) => {
-
-    const { name, description } = req.body;
-
-    if (!name || name.length == 0) return res.status(400).send('Missing name.');
-
-    if (!description) return res.status(400).send('Missing description.');
-
-    const role = new Role({
-        name: name,
-        description: description
+        const op = await role.save();
+        if (!op) return res.sendStatus(500);
+        res.send(op);
     });
-
-    const op = await role.save();
-
-    if (!op) return res.sendStatus(500);
-
-    res.send(op);
-
-});
 
 RoleRouter.get('/list',
     query('page').isInt({ min: 0 }).default(0),
     query('limit').isInt({ min: 1, max: 100 }).default(100),
-    async (req, res) => {
+    async (req: Request, res: Response) => {
+        await checkPermissions(req, 'ciam.role.list');
 
+        //@ts-ignore
         const { page, limit } = req.query as { page: number, limit: number; };
 
         let query = Role.find();
@@ -82,64 +47,64 @@ RoleRouter.get('/list',
         }
 
         const op = await query.exec();
-
         if (!op) return res.sendStatus(500);
-
         res.send(op);
-
     });
 
-RoleRouter.post('/update', getRoleBody, async (req, res) => {
+RoleRouter.post('/update',
+    body('_id').exists().isString().matches(Check.objectIdRegex),
+    body('name').optional().isString().notEmpty(),
+    body('description').optional().isString().notEmpty(),
+    body('permissions').optional().isArray().custom(v => {
+        return flagArray(v, false, true);
+    }),
+    async (req, res) => {
+        const roleId = req.body._id;
+        const required = [`ciam.role.update.${roleId}`];
 
-    const role: Document<Role> & Role = req.body.role;
+        const role = await Role.findOne({ _id: roleId });
+        if (!role) return res.status(404).send('Role not found');
 
-    const { name, description, inherit, permissions } = req.body;
+        const { name, description, inherit, permissions } = req.body;
 
-    if (name) {
-        if (name.length == 0) return res.status(400).send('empty name');
-        role.name = name;
-    }
+        if (permissions)
+            for (const p of permissions)
+                required.push(p);
 
-    if (description) {
-        if (description.length == 0) return res.status(400).send('empty description');
-        role.description = description;
-    }
+        await checkPermissions(req, ...required);
 
-    if (inherit) {
-        if (!Array.isArray(inherit)) return res.status(400).send('inherit not array');
-        //role.inherit = stringToObjectIdArray(unique(inherit));
-    }
-
-    if (permissions) {
-        if (!Array.isArray(permissions)) return res.status(400).send('permissions not array');
-
-        try {
+        if (permissions)
             role.set('permissions', flagArray(permissions));
-        } catch (e) {
-            return res.status(400).send('permissions invalid');
-        }
-    }
+        if (name)
+            role.name = name;
+        if (description)
+            role.description = description;
+        //if (inherit)
+        //role.inherit = stringToObjectIdArray(unique(inherit));
 
-    const op = await role.save();
+        const op = await role.save();
+        if (!op) return res.sendStatus(500);
+        res.send(op);
+    });
 
-    if (!op) return res.sendStatus(500);
+RoleRouter.get('/:roleId',
+    param('roleId').exists().isString().matches(Check.objectIdRegex),
+    async (req: Request, res: Response) => {
+        const roleId = req.params.roleId;
+        await checkPermissions(req, `ciam.role.get.${roleId}`);
+        const op = await Role.findOne({ _id: roleId });
+        if (!op) return res.status(404).send('Role not found');
+        res.send(op);
+    });
 
-    res.send(op);
-
-});
-
-RoleRouter.get('/:roleId', getRole, async (req, res) => {
-    res.send(req.body.role);
-});
-
-RoleRouter.delete('/:roleId', getRole, async (req, res) => {
-
-    const op = await req.body.role.delete();
-
-    if (!op) return res.status(404).send(`Role ${req.body.role._id} could not be deleted.`);
-
-    res.send(op);
-
-});
+RoleRouter.delete('/:roleId',
+    param('roleId').exists().isString().matches(Check.objectIdRegex),
+    async (req: Request, res: Response) => {
+        const roleId = req.params.roleId;
+        await checkPermissions(req, `ciam.role.delete.${roleId}`);
+        const op = await Role.findOneAndDelete({ _id: roleId });
+        if (!op) return res.status(404).send('Role not found');
+        res.send(op);
+    });
 
 export { RoleRouter };
