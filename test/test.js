@@ -22,10 +22,9 @@ describe('permission', function () {
                 'more.invalid.*.perms',
                 '.',
                 '',
-                '0',
                 '.test',
                 '.test.test.',
-                'with.invalid1.123.charS',
+                'with.invalid1.123!½.charS',
                 'more.$.e',
                 'mor?'
             ]
@@ -164,7 +163,7 @@ describe('permission', function () {
 
             const heldFlags = flagArray(held)
             const reqFlags = flagArray(required)
-            assert.ok(!hasAll(reqFlags, heldFlags))
+            assert.ok(!hasAll(reqFlags, heldFlags).passed)
         })
     })
 
