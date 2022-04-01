@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "node-watch": "cd dist && nodemon index.js",
-    "test": "mocha --require mocha-suppress-logs --recursive --exit"
+    "test": "mocha --require mocha-suppress-logs --recursive --exit",
+    "redoc-standalone": "redoc-cli bundle openapi.yaml"
   },
   "author": "Volcano",
   "license": "ISC",
