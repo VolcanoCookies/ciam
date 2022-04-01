@@ -18,9 +18,9 @@ interface NewPermission {
 }
 
 PermissionRouter.post('/create',
-    body('name').exists().isString().isLength({ min: 1 }),
-    body('description').exists().isString().isLength({ min: 1 }),
-    body('flag').exists().isString().matches(/[a-z]+´(\.[a-z])*/),
+    body('name').exists().isString(),
+    body('description').exists().isString(),
+    body('flag').exists().isString().matches(Check.strictFlagRegex),
     async (req: Request, res: Response) => {
         const { name, description, flag } = req.body as NewPermission;
         const lastIndex = flag.lastIndexOf('.');
