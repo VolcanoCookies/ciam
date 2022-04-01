@@ -7,22 +7,17 @@ import { stringToObjectIdArray, unique } from '../utils.js';
 import { User, UserEntry } from '../schemas/UserSchema.js';
 import { Flag, hasAll, flagArray, flattenUser, flattenRole, checkPermissions } from '../permission.js';
 import { Role, RoleEntry } from '../schemas/RoleSchema.js';
-import { Check } from 'ciam-commons';
+import { Check, Model } from 'ciam-commons';
 
 const PermissionRouter = express.Router();
-
-interface NewPermission {
-    name: string;
-    description: string;
-    flag: string;
-}
 
 PermissionRouter.post('/create',
     body('name').exists().isString(),
     body('description').exists().isString(),
     body('flag').exists().isString().matches(Check.strictFlagRegex),
     async (req: Request, res: Response) => {
-        const { name, description, flag } = req.body as NewPermission;
+        //@ts-ignore
+        const { name, description, flag } = req.body;
         const lastIndex = flag.lastIndexOf('.');
         const key = flag.slice(lastIndex + 1);
         const path = flag.slice(0, Math.max(lastIndex, 0));
@@ -126,14 +121,6 @@ PermissionRouter.post('/update',
         res.send(op);
     });
 
-interface CheckRequest {
-    type: 'user' | 'role' | 'discordUser';
-    id: string;
-    required: Array<string>;
-    additional: Array<string>;
-    includeMissing: boolean;
-}
-
 PermissionRouter.post('/has',
     body('type').isIn(['user', 'role', 'discordUser']),
     body('id').exists().matches(/[0-9a-f]{12,24}/),
@@ -141,9 +128,9 @@ PermissionRouter.post('/has',
     body('additional').optional().isArray().default([]),
     body('includeMissing').optional().isBoolean().default(false),
     async (req: Request, res: Response) => {
-        const request = req.body as CheckRequest;
+        const request = req.body as Model.CheckRequest;
 
-        let subject: UserEntry | RoleEntry | null;
+        let subject: UserEntry | RoleEntry | null = null;
 
         switch (request.type) {
             case 'user': {
