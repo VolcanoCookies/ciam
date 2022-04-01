@@ -150,6 +150,7 @@ describe('Users', function () {
         })
     })
 
+    /*
     describe('/GET token', function () {
         it('should return correct token for own user', function (done) {
             get('/user/token', botUser)
@@ -160,5 +161,6 @@ describe('Users', function () {
                 })
         })
     })
+    */
 
 })
