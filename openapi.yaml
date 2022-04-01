@@ -411,7 +411,7 @@ paths:
         '500':
           description: 'Error when saving the permission to the database'
 
-  /permissions/me:
+  /permission/me:
     get:
       security:
         - bearerAuth: ['ciam.permission.me']
