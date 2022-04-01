@@ -7,20 +7,6 @@ import { body, param } from 'express-validator';
 
 const UserRouter = express.Router();
 
-const getUser = async (req: Request, res: Response, next: NextFunction) => {
-    const userId = sanitize(req.params.userId);
-
-    if (!userId) return res.status(400).send(`User ${userId} not found.`);
-
-    const user = await User.findById(userId);
-
-    if (!user) return res.status(400).send(`User ${userId} not found.`);
-
-    req.body.user = user;
-
-    next();
-};
-
 UserRouter.get('/valid', (req, res) => res.sendStatus(200));
 
 // TODO: Currently any role can be given, regardless of what permissions that role has
@@ -29,8 +15,6 @@ UserRouter.post('/create',
     async (req, res) => {
         const { name, roles, permissions, discord } = req.body;
         const id = discord?.id;
-
-        if (!name && !discord) return res.sendStatus(400);
 
         const user = new User({
             name: name,
@@ -76,11 +60,12 @@ UserRouter.post('/update',
     }
 );
 
-UserRouter.get('/token', async (req, res) => {
+// This is dumb, if they can access this endpoint then they already have a token
+/*UserRouter.get('/token', async (req, res) => {
     await checkPermissions(req, `ciam.user.token.self`);
     //@ts-ignore
     return res.send(createToken(req.__cache.user));
-});
+});*/
 
 UserRouter.get('/:userId',
     param('userId').exists().isString().matches(objectIdRegex),
