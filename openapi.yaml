@@ -172,7 +172,155 @@ paths:
         '500':
           description: 'Failed listing roles'
 
-  # Continue from here
+  /user/create:
+    post:
+      security:
+        - bearerAuth: ['ciam.user.create', '{PERMISSIONS}']
+      summary: 'Create a user'
+      description: 'If any permissions are given, will have to have all those permissions'
+      requestBody:
+        description: 'The user to create'
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 'The name of this user'
+                roles:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ObjectId'
+                  description: 'The role ids this user has'
+                permissions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Flag'
+                  description: 'The permission flags this user has'
+                discord:
+                  type: object
+                  properties:
+                    id:
+                      $ref: '#/components/schemas/DiscordId'
+                      description: 'User discord id'
+              required:
+                - name
+      responses:
+        '200':
+          description: 'Returns the newly created user'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: 'Invalid body'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '500':
+          description: 'Failed saving user to database'
+
+  /user/{userId}:
+    get:
+      summary: 'Get a user'
+      description: 'Get a user by their user id'
+      security:
+        - bearerAuth: ['ciam.user.get.{USER_ID}']
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+          description: 'The user ID'
+      responses:
+        '200':
+          description: 'Returns the user'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '404':
+          description: 'User not found'
+
+    delete:
+      summary: 'Delete a user'
+      description: 'Delete a user by their user id'
+      security:
+        - bearerAuth: ['ciam.user.delete.{USER_ID}']
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+          description: 'The user ID'
+      responses:
+        '200':
+          description: 'Returns the deleted user'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '404':
+          description: 'User not found'
+
+  /user/update:
+    post:
+      summary: 'Update a user'
+      security:
+        - bearerAuth: ['ciam.user.update.{USER_ID}']
+      requestBody:
+        description: 'The user to update, omitted fields wont be updated'
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 'New name of this user'
+                permissions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Flag'
+                  description: 'New permissions of this user'
+                roles:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ObjectId'
+                  description: 'New roles of this user'
+      responses:
+        '200':
+          description: 'Returns the updated user'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: 'Invalid body'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '404':
+          description: 'User not found'
+        '500':
+          description: 'Failed saving user to database'
+
+  /user/valid:
+    get:
+      summary: 'Validate own token'
+      description: 'Just requires you to have a valid token, no permissions.'
+      responses:
+        '200':
+          description: 'Your token is valid'
+        '401':
+          description: 'Your token is missing or invalid'
 
   /permission/{flag}:
     get:
@@ -185,7 +333,7 @@ paths:
           name: flag
           required: true
           schema:
-            $ref: '#/components/schemas/Flag'
+            $ref: '#/components/schemas/FlagStrict'
           description: 'The flag to find'
       responses:
         '200':
@@ -194,6 +342,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Permission'
+        '401':
+          description: 'Invalid token or missing permissions'
         '404':
           description: 'Permission not found'
 
@@ -207,8 +357,8 @@ paths:
           name: flag
           required: true
           schema:
-            $ref: '#/components/schemas/Flag'
-          description: 'The id of this permission'
+            $ref: '#/components/schemas/FlagStrict'
+          description: 'The flag of this permission'
       responses:
         '200':
           description: 'Returns the deleted permission'
@@ -216,10 +366,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Permission'
+        '401':
+          description: 'Invalid token or missing permissions'
         '404':
           description: 'Permission not found'
-        '401':
-          description: 'Missing permissions'
 
   /permission/create:
     post:
@@ -241,9 +391,12 @@ paths:
                   type: string
                   description: 'A description for this permission flag'
                 flag:
-                  type: string
-                  pattern: '[a-z]+(\.[a-z])*'
-                  description: 'The permission flag to create, special key are not allowed for creating permissions'
+                  $ref: '#/components/schemas/FlagStrict'
+                  description: 'The permission flag to create'
+              required:
+                - name
+                - description
+                - flag
       responses:
         '200':
           description: 'Returns the newly created permission'
@@ -253,6 +406,8 @@ paths:
                 $ref: '#/components/schemas/Permission'
         '400':
           description: 'Bad request'
+        '401':
+          description: 'Invalid token or missing permissions'
         '500':
           description: 'Error when saving the permission to the database'
 
@@ -269,12 +424,15 @@ paths:
           required: false
           schema:
             type: number
+            minimum: 0
         - in: query
           name: limit
           description: 'Maximum amount of permissions to return'
           required: false
           schema:
             type: number
+            minimum: 1
+            maximum: 100
       responses:
         '200':
           description: 'All your permissions'
@@ -335,9 +493,9 @@ paths:
     post:
       security:
         - bearerAuth: ['ciam.permission.update.{FLAG}']
-      summary: 'Create a role'
+      summary: 'Update a permission'
       requestBody:
-        description: 'The role to create, only name and description'
+        description: 'The permission to update.'
         required: true
         content:
           application/json:
@@ -363,16 +521,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Permission'
         '400':
-          description: 'Flag was missing'
+          description: 'Invalid body'
         '401':
           description: 'Invalid token or missing permissions'
+        '500':
+          description: 'Failed saving permission to database'
 
   /permission/has:
     post:
       security:
         - bearerAuth: ['ciam.permission.has.{ALL_REQUIRED_PERMISSIONS}']
       summary: 'Check permissions'
-      description: 'Check if a user or role has the provided permissions.<br>test'
+      description: 'Check if a user or role has the provided permissions.'
       requestBody:
         description: 'The permission check to perform'
         required: true
@@ -389,131 +549,10 @@ paths:
                 $ref: '#/components/schemas/CheckResult'
         '400':
           description: 'Bad request'
+        '401':
+          description: 'Invalid token or missing permissions'
         '404':
           description: 'Entity specified by id field was not found'
-
-  /user/create:
-    post:
-      security:
-        - bearerAuth: ['ciam.user.create', '{PERMISSIONS}']
-      summary: 'Create a user'
-      description: 'If any permissions are given, will have to have all those permissions'
-      requestBody:
-        description: 'The user to create'
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                  description: 'The name of this user'
-                roles:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/ObjectId'
-                  description: 'The role ids this user has'
-                permissions:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/Flag'
-                  description: 'The permission flags this user has'
-                discord:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                      description: 'User discord id'
-              required:
-                - name
-      responses:
-        '200':
-          description: 'Returns the newly created user'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '400':
-          description: 'Name was missing'
-        '401':
-          description: 'Invalid token or missing permissions'
-        '500':
-          description: 'Failed saving user to database'
-
-  /user/token/{userId}:
-    get:
-      summary: 'Get a token'
-      description: 'Get a users ciam api token'
-      security:
-        - bearerAuth: ['ciam.user.get.token.{USER_ID}']
-      parameters:
-        - in: path
-          name: userId
-          required: true
-          schema:
-            type: string
-          description: 'The user ID'
-      responses:
-        '200':
-          description: 'Returns the user token'
-          content:
-            text/plain:
-              schema:
-                type: string
-        '401':
-          description: 'Invalid token or missing permissions'
-        '404':
-          description: 'User not found'
-
-  /user/{userId}:
-    get:
-      summary: 'Get a user'
-      description: 'Get a user by its userId'
-      security:
-        - bearerAuth: ['ciam.user.get.{USER_ID}']
-      parameters:
-        - in: path
-          name: userId
-          required: true
-          schema:
-            type: string
-          description: 'The user ID'
-      responses:
-        '200':
-          description: 'Returns the user'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '401':
-          description: 'Invalid token or missing permissions'
-        '404':
-          description: 'User not found'
-
-    delete:
-      summary: 'Delete a user'
-      description: 'Delete a user by its userId'
-      security:
-        - bearerAuth: ['ciam.user.delete.{USER_ID}']
-      parameters:
-        - in: path
-          name: userId
-          required: true
-          schema:
-            type: string
-          description: 'The user ID'
-      responses:
-        '200':
-          description: 'Returns the deleted user'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '401':
-          description: 'Invalid token or missing permissions'
-        '404':
-          description: 'User not found'
 
 components:
   securitySchemes:
@@ -524,9 +563,13 @@ components:
   schemas:
     ObjectId:
       type: string
-      minLength: 12
       maxLength: 24
-      pattern: '^[0-9a-f]+$'
+      pattern: '^[0-9a-f]{24}$'
+    DiscordId:
+      type: string
+      minLength: 16
+      maxLength: 20
+      pattern: '^[0-9]{16,20}$'
     Flag:
       type: string
       minLength: 1
@@ -585,6 +628,13 @@ components:
           items:
             $ref: '#/components/schemas/Flag'
           description: 'List of permission flags this user has'
+        discord:
+          type: object
+          properties:
+            id:
+              $ref: '#/components/schemas/DiscordId'
+          required:
+            - id
       required:
         - _id
         - name
@@ -609,8 +659,8 @@ components:
           items:
             type: string
           description: 'The path to this permission key'
-        fullPath:
-          type: string
+        flag:
+          $ref: '#/components/schemas/FlagStrict'
           description: 'The path and key combined'
         creator:
           $ref: '#/components/schemas/ObjectId'
@@ -620,7 +670,7 @@ components:
         - description
         - key
         - path
-        - fullPath
+        - flag
         - creator
     CheckResult:
       type: object
@@ -639,16 +689,26 @@ components:
     CheckRequest:
       type: object
       description: 'A request to check permissions'
+      discriminator:
+        propertyName: type
+        mapping:
+          user: '#/components/schemas/UserRoleCheckRequest'
+          role: '#/components/schemas/UserRoleCheckRequest'
+          discordUser: '#/components/schemas/DiscordUserCheckRequest'
       properties:
         type:
           type: string
-          pattern: 'user|role|discord'
           description: 'Specify what sort of id the id field refers to'
-        id:
-          oneOf:
-            - $ref: '#/components/schemas/ObjectId'
-            - type: string
-          description: 'The id of the entity to check permissions for'
+    BaseCheckRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          description: 'What the id refers to'
+          enum:
+            - 'user'
+            - 'role'
+            - 'discordUser'
         required:
           type: array
           uniqueItems: true
@@ -658,13 +718,32 @@ components:
         additional:
           type: array
           uniqueItems: true
+          default: []
           items:
             $ref: '#/components/schemas/Flag'
           description: 'Additional flags that the entity will have when checking'
         includeMissing:
           type: boolean
+          default: false
           description: 'If the response should include all the flags that the entity did not have from the required flags'
       required:
         - type
-        - id
         - required
+    UserRoleCheckRequest:
+      allOf:
+        - $ref: '#/components/schemas/BaseCheckRequest'
+        - type: object
+          properties:
+            id:
+              $ref: '#/components/schemas/ObjectId'
+          required:
+            - id
+    DiscordUserCheckRequest:
+      allOf:
+        - $ref: '#/components/schemas/BaseCheckRequest'
+        - type: object
+          properties:
+            id:
+              $ref: '#/components/schemas/DiscordId'
+          required:
+            - id
