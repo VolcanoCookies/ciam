@@ -109,6 +109,9 @@ paths:
             schema:
               type: object
               properties:
+                _id:
+                  $ref: '#/components/schemas/ObjectId'
+                  description: 'The id of the user to update'
                 name:
                   type: string
                   description: 'New name of this role'
@@ -120,6 +123,8 @@ paths:
                   items:
                     $ref: '#/components/schemas/Flag'
                   description: 'New permissions of this role'
+              required:
+                - _id
       responses:
         '200':
           description: 'Returns the updated role'
@@ -283,6 +288,9 @@ paths:
             schema:
               type: object
               properties:
+                _id:
+                  $ref: '#/components/schemas/ObjectId'
+                  description: 'The id of the user to update'
                 name:
                   type: string
                   description: 'New name of this user'
@@ -296,6 +304,8 @@ paths:
                   items:
                     $ref: '#/components/schemas/ObjectId'
                   description: 'New roles of this user'
+              required:
+                - _id
       responses:
         '200':
           description: 'Returns the updated user'
