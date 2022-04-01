@@ -3,7 +3,7 @@ import { Role, RoleEntry } from './schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
 import _ from 'lodash';
 import { Request, Response, NextFunction } from 'express';
-import { Check } from 'ciam-commons';
+import { Check, Model } from 'ciam-commons';
 
 /**
  * Rules for permissions:
@@ -17,37 +17,6 @@ import { Check } from 'ciam-commons';
  * 7. '?' can be used as a special key anywhere in the flag, will match any single key
  * 
  */
-
-
-// Our lord an savior Ash has come to bless us
-class Flag extends String {
-    isWildcard: boolean;
-    keys: Array<string>;
-
-    constructor(value: string) {
-        if (!validFlag(value)) throw new Error(`Invalid permission flag ${value}`);
-        super(value);
-
-        this.isWildcard = value == '*' || value.endsWith('.*');
-        this.keys = value.split('.');
-    }
-
-    public static validate(value: string | Flag): Flag {
-        if (!(value instanceof Flag)) {
-            return new Flag(value);
-        }
-        return value;
-    }
-
-    equals(other: Flag): boolean {
-        return this.toString() == other.toString();
-    }
-}
-
-interface CheckResult {
-    passed: boolean;
-    missing: Array<Flag> | undefined;
-}
 
 class PermissionError extends Error {
     constructor(missing: Array<string> | Array<Flag> | undefined) {
@@ -99,7 +68,7 @@ function has(required: Flag, held: Flag): boolean {
  * @param held permission flags to look in.
  * @returns true if all flags in {@link required} have at least 1 flag in {@link held} that matches.
  */
-function hasAll(required: Array<Flag>, held: Array<Flag>, returnMissing: boolean = false): CheckResult {
+function hasAll(required: Array<Flag>, held: Array<Flag>, returnMissing: boolean = false): Model.CheckResult {
     if (returnMissing) {
         const missing = required.filter(r => {
             return !held.some(h => { return has(r, h); });
@@ -168,7 +137,7 @@ function flagArray(perms: Array<string | Flag>, ignoreInvalid: boolean = false, 
     return removeDuplicate ? _.uniq(valid) : valid;
 }
 
-async function checkPermissions(req: any, ...required: Array<string>): Promise<CheckResult> {
+async function checkPermissions(req: any, ...required: Array<string>): Promise<Model.CheckResult> {
     if (!req.__cache) req.__cache = {};
     if (!req.__cache.user) {
         const user = await User.findById(req.user.id);
