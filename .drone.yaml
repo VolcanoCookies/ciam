@@ -10,5 +10,6 @@ steps:
     image: node:17
     commands:
       - npm install --dev
+      - npm install typescript -g
       - tsc
       - npm test
