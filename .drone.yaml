@@ -9,7 +9,7 @@ environment:
   CLIENT_ID: 123456789
   CLIENT_SECRET: test-secret
   IS_DEV: true
-  DATABASE_URL: 'mongodb://user:pass@localhost:27017/ciam-test?authSource=ciam-test&authMechanism=SCRAM-SHA-256'
+  DATABASE_URL: 'mongodb://user:pass@mongo/ciam-test?authSource=ciam-test&authMechanism=SCRAM-SHA-256'
 
 steps:
   - name: test
@@ -19,3 +19,8 @@ steps:
       - npm install typescript -g
       - tsc
       - npm test
+
+services:
+  - name: mongo
+    image: mongo:5.0.6
+    command: [--smallfiles]
