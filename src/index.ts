@@ -11,70 +11,79 @@ import { User } from './schemas/UserSchema.js';
 import log from 'loglevel';
 import chalk from 'chalk';
 import prefix from 'loglevel-plugin-prefix';
+import { createToken } from './utils.js';
+import cors from 'cors';
 
 log.setLevel(process.env.IS_DEV ? log.levels.DEBUG : log.levels.INFO);
 
 const colors = {
-    TRACE: chalk.magenta,
-    DEBUG: chalk.cyan,
-    INFO: chalk.blue,
-    WARN: chalk.yellow,
-    ERROR: chalk.red,
+	TRACE: chalk.magenta,
+	DEBUG: chalk.cyan,
+	INFO: chalk.blue,
+	WARN: chalk.yellow,
+	ERROR: chalk.red,
 };
 
 prefix.reg(log);
 log.enableAll();
 
 prefix.apply(log, {
-    format(level, name, timestamp) {
-        //@ts-ignore
-        return `${chalk.gray(`[${timestamp}]`)} ${colors[level.toUpperCase()](level)} ${chalk.green(`${name}:`)}`;
-    },
+	format(level, name, timestamp) {
+		//@ts-ignore
+		return `${chalk.gray(`[${timestamp}]`)} ${colors[level.toUpperCase()](level)} ${chalk.green(`${name}:`)}`;
+	},
 });
 
 const init = async () => {
-    await mongoose.connect(process.env.DATABASE_URL!);
+	await mongoose.connect(process.env.DATABASE_URL!);
 
-    const filter = { _id: '000000000000000000000000' };
-    const update = {
-        name: 'SYSTEM',
-        permissions: ['*']
-    };
+	const filter = { _id: '000000000000000000000000' };
+	const update = {
+		name: 'SYSTEM',
+		permissions: ['*']
+	};
 
-    await User.findOneAndUpdate(filter, update, { upsert: true });
-    log.info('Upserted SYSTEM user');
+	//@ts-ignore
+	const systemUser: User = await User.findOneAndUpdate(filter, update, { upsert: true });
+	log.info('Upserted SYSTEM user with token "' + createToken(systemUser) + '"');
 };
 
 const app = express();
 
+app.use(cors({
+	origin: '*'
+}));
+
 app.use(jwt({
-    secret: process.env.CLIENT_SECRET as string,
-    algorithms: ['HS256']
+	secret: process.env.CLIENT_SECRET as string,
+	algorithms: ['HS256']
 }).unless({ path: ['/login', '/callback'] }));
 
 app.use((req, res, next) => {
-    req.body = sanitize(req.body);
-    next();
+	req.body = sanitize(req.body);
+	next();
 });
 
 app.use(express.json());
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    if (err.name === 'UnauthorizedError') {
-        return res.status(401).send('invalid token');
-    } else if (err) {
-        log.error(err);
-        return res.status(400);
-    }
-    next();
+	if (err.name === 'UnauthorizedError') {
+		return res.status(401).send('invalid token');
+	} else if (err) {
+		log.error(err);
+		return res.status(400);
+	}
+	next();
 });
 
 app.use(AuthRouter);
 
 app.use(async (req, res, next) => {
-    //@ts-ignore
-    log.info(req.ip, '|', req.user.id, '|', req.method, req.url);
-    next();
+	if (!req.user)
+		return res.status(401).send('invalid token');
+	//@ts-ignore
+	log.info(req.ip, '|', req.user.id, '|', req.method, req.url);
+	next();
 });
 
 app.use('/role', RoleRouter);
@@ -82,18 +91,18 @@ app.use('/permission', PermissionRouter);
 app.use('/user', UserRouter);
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    console.log(err.name);
-    if (err.name === 'PermissionError')
-        res.status(401).send(err.message);
-    else if (err) {
-        log.error(err);
-        res.sendStatus(400);
-    }
+	console.log(err.name);
+	if (err.name === 'PermissionError')
+		res.status(401).send(err.message);
+	else if (err) {
+		log.error(err);
+		res.sendStatus(400);
+	}
 });
 
 app.listen(process.env.PORT, async () => {
-    await init();
-    log.info(`Started listening on port ${process.env.PORT}`);
+	await init();
+	log.info(`Started listening on port ${process.env.PORT}`);
 });
 
 export { app };
