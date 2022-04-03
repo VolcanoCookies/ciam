@@ -10,4 +10,5 @@ steps:
     image: node:17
     commands:
       - npm install --dev
+      - tsc
       - npm test
