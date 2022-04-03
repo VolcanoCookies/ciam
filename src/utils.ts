@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { User } from './schemas/UserSchema.js';
 import jsonwebtoken from 'jsonwebtoken';
+import { Check } from 'ciam-commons';
 
 function stringToObjectIdArray(arr: Array<string>): Array<mongoose.Types.ObjectId> {
 
@@ -41,6 +42,24 @@ function createToken(user: User): string {
     return token as string;
 };
 
+function difference<T>(a: Array<T>, b: Array<T>): Array<T> {
+    const arr = new Array<T>();
+    for (const e of a) {
+        if (!b.includes(e)) {
+            arr.push(e);
+        }
+    }
+    return arr;
+}
+
 const objectIdRegex = /[a-f0-9]{24}/;
 
-export { stringToObjectIdArray, unique, createToken, objectIdRegex };
+const flagValidator = function (arr: Array<string>) {
+    return arr.every(f => f.match(Check.flagRegex));
+};
+
+const strictFlagValidator = function (arr: Array<string>) {
+    return arr.every(f => f.match(Check.strictFlagRegex));
+};
+
+export { stringToObjectIdArray, unique, createToken, objectIdRegex, difference, flagValidator, strictFlagValidator };
