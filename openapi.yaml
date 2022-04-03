@@ -12,6 +12,8 @@ paths:
       description: 'Get a role by its roleId'
       security:
         - bearerAuth: ['ciam.role.get.{ROLE_ID}']
+      tags:
+        - role
       parameters:
         - in: path
           name: roleId
@@ -32,10 +34,12 @@ paths:
           description: 'Role not found'
 
     delete:
-      summary: 'Delete a role'
-      description: 'Delete a role by its role ID'
       security:
         - bearerAuth: ['ciam.role.delete.{ROLE_ID}']
+      summary: 'Delete a role'
+      description: 'Delete a role by its role ID'
+      tags:
+        - role
       parameters:
         - in: path
           name: roleId
@@ -59,9 +63,15 @@ paths:
     post:
       summary: 'Create a role'
       security:
-        - bearerAuth: ['ciam.role.create']
+        - bearerAuth: ['ciam.role.create', 'ciam.permission.grant.{FLAGS}']
+      description: |
+        Create a new role from a name, description, and optionally also its permission flags.<br>
+        `ciam.permission.grant.FLAGS` is only checked if permissions are provided, for example if you try to
+        create a role with the permissions [`chipware.ban`, `chipware.unban`] then you will need to have the
+        permissions [`ciam.permission.grant.chipware.ban`, `ciam.permission.grant.chipware.unban`].
+      tags:
+        - role
       requestBody:
-        description: 'The role to create, only name and description'
         required: true
         content:
           application/json:
@@ -100,9 +110,21 @@ paths:
     post:
       summary: 'Update a role'
       security:
-        - bearerAuth: ['ciam.role.update.{ROLE_ID}']
+        - bearerAuth:
+            [
+              'ciam.role.update.{ROLE_ID}',
+              'ciam.permission.grant.{FLAGS}',
+              'ciam.permission.revoke.{FLAGS}',
+            ]
+      tags:
+        - role
       requestBody:
-        description: 'The role to update, omitted fields wont be updated'
+        description: |
+          The role to update, omitted fields wont be updated.<br>
+          `ciam.permission.grant|revoke.FLAGS` is only checked if permissions are provided, for example if you try to
+          set the permissions to [`chipware.ban`, `chipware.unban`] on a role that already has the permissions
+          [`chipware.ban`, `chipware.kick`] then you will need to have the permissions
+          [`ciam.permission.grant.chipware.unban`, `ciam.permission.revoke.chipware.kick`].
         required: true
         content:
           application/json:
@@ -147,6 +169,8 @@ paths:
       description: 'Get a list of all roles'
       security:
         - bearerAuth: ['ciam.role.list']
+      tags:
+        - role
       parameters:
         - in: query
           name: skip
@@ -172,17 +196,25 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Role'
-        '401':
+        '400':
           description: 'Invalid query parameters'
+        '401':
+          description: 'Invalid token or missing permissions'
         '500':
           description: 'Failed listing roles'
 
   /user/create:
     post:
       security:
-        - bearerAuth: ['ciam.user.create', '{PERMISSIONS}']
+        - bearerAuth: ['ciam.user.create', 'ciam.permission.grant.{FLAGS}']
       summary: 'Create a user'
-      description: 'If any permissions are given, will have to have all those permissions'
+      description: |
+        Create a new role from at least a name.<br>
+        `ciam.permission.grant.FLAGS` is only checked if permissions are provided, for example if you try to
+        create a role with the permissions [`chipware.ban`, `chipware.unban`] then you will need to have the
+        permissions [`ciam.permission.grant.chipware.ban`, `ciam.permission.grant.chipware.unban`].
+      tags:
+        - user
       requestBody:
         description: 'The user to create'
         required: true
@@ -226,12 +258,54 @@ paths:
         '500':
           description: 'Failed saving user to database'
 
+  /user/list:
+    get:
+      summary: 'List users'
+      description: 'Get a list of all users'
+      security:
+        - bearerAuth: ['ciam.user.list']
+      tags:
+        - user
+      parameters:
+        - in: query
+          name: skip
+          description: 'Number of users to skip'
+          required: false
+          schema:
+            type: number
+            minimum: 0
+        - in: query
+          name: limit
+          description: 'Maximum amount of users to return'
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: 'Returns the users'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '400':
+          description: 'Invalid query parameters'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '500':
+          description: 'Failed listing users'
+
   /user/{userId}:
     get:
       summary: 'Get a user'
       description: 'Get a user by their user id'
       security:
         - bearerAuth: ['ciam.user.get.{USER_ID}']
+      tags:
+        - user
       parameters:
         - in: path
           name: userId
@@ -256,6 +330,8 @@ paths:
       description: 'Delete a user by their user id'
       security:
         - bearerAuth: ['ciam.user.delete.{USER_ID}']
+      tags:
+        - user
       parameters:
         - in: path
           name: userId
@@ -279,9 +355,21 @@ paths:
     post:
       summary: 'Update a user'
       security:
-        - bearerAuth: ['ciam.user.update.{USER_ID}']
+        - bearerAuth:
+            [
+              'ciam.user.update.{USER_ID}',
+              'ciam.permission.grant.{FLAGS}',
+              'ciam.permission.revoke.{FLAGS}',
+            ]
+      tags:
+        - user
       requestBody:
-        description: 'The user to update, omitted fields wont be updated'
+        description: |
+          The user to update, omitted fields wont be updated.<br>
+          `ciam.permission.grant|revoke.FLAGS` is only checked if permissions are provided, for example if you try to
+          set the permissions to [`chipware.ban`, `chipware.unban`] on a user that already has the permissions
+          [`chipware.ban`, `chipware.kick`] then you will need to have the permissions
+          [`ciam.permission.grant.chipware.unban`, `ciam.permission.revoke.chipware.kick`].
         required: true
         content:
           application/json:
@@ -326,6 +414,8 @@ paths:
     get:
       summary: 'Validate own token'
       description: 'Just requires you to have a valid token, no permissions.'
+      tags:
+        - user
       responses:
         '200':
           description: 'Your token is valid'
@@ -338,6 +428,8 @@ paths:
         - bearerAuth: ['ciam.permission.get.{FLAG}']
       summary: 'Get a permission'
       description: 'Get a permission flag'
+      tags:
+        - permission
       parameters:
         - in: path
           name: flag
@@ -362,6 +454,8 @@ paths:
         - bearerAuth: ['ciam.permission.delete.{FLAG}']
       summary: 'Delete a permission'
       description: 'Delete a permission flag'
+      tags:
+        - permission
       parameters:
         - in: path
           name: flag
@@ -386,6 +480,8 @@ paths:
       security:
         - bearerAuth: ['ciam.permission.create.{FLAG}']
       summary: 'Create a permission'
+      tags:
+        - permission
       requestBody:
         description: 'The permission to create, a partial of the Permission object'
         required: true
@@ -427,6 +523,8 @@ paths:
         - bearerAuth: ['ciam.permission.me']
       summary: 'Own permissions'
       description: 'Get your own permissions. Limit and page query parameters lets you easily paginate.'
+      tags:
+        - permission
       parameters:
         - in: query
           name: skip
@@ -463,6 +561,8 @@ paths:
         - bearerAuth: ['ciam.permission.list.{SEARCH}']
       summary: 'List permissions'
       description: 'Lets you list permissions. Limit and page query parameters lets you easily paginate.'
+      tags:
+        - permission
       parameters:
         - in: query
           name: skip
@@ -504,6 +604,8 @@ paths:
       security:
         - bearerAuth: ['ciam.permission.update.{FLAG}']
       summary: 'Update a permission'
+      tags:
+        - permission
       requestBody:
         description: 'The permission to update.'
         required: true
@@ -543,6 +645,8 @@ paths:
         - bearerAuth: ['ciam.permission.has.{ALL_REQUIRED_PERMISSIONS}']
       summary: 'Check permissions'
       description: 'Check if a user or role has the provided permissions.'
+      tags:
+        - permission
       requestBody:
         description: 'The permission check to perform'
         required: true
