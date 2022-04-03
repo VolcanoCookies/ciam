@@ -48,7 +48,7 @@ function validFlag(perm: string): boolean {
  * @param held A held permission flag.
  * @returns true if {@link held} matches {@link required}.
  */
-function has(required: Flag, held: Flag): boolean {
+function has(required: Model.Flag, held: Model.Flag): boolean {
     if (required.length == 0 || held.length == 0) return false;
     if (held.keys > required.keys) return false;
     for (var i = 0; i < required.keys.length; i++) {
@@ -68,7 +68,7 @@ function has(required: Flag, held: Flag): boolean {
  * @param held permission flags to look in.
  * @returns true if all flags in {@link required} have at least 1 flag in {@link held} that matches.
  */
-function hasAll(required: Array<Flag>, held: Array<Flag>, returnMissing: boolean = false): Model.CheckResult {
+function hasAll(required: Array<Model.Flag>, held: Array<Model.Flag>, returnMissing: boolean = false): Model.CheckResult {
     if (returnMissing) {
         const missing = required.filter(r => {
             return !held.some(h => { return has(r, h); });
@@ -87,22 +87,22 @@ function hasAll(required: Array<Flag>, held: Array<Flag>, returnMissing: boolean
     }
 }
 
-async function flattenUser(user: UserEntry): Promise<Array<Flag>> {
+async function flattenUser(user: UserEntry): Promise<Array<Model.Flag>> {
 
-    const flags = new Array<Flag>();
+    const flags = new Array<Model.Flag>();
 
     user = await user.populate<{ roles: Types.Array<Role>; }>('roles', 'permissions');
 
     user.permissions.forEach(p => {
         try {
-            flags.push(Flag.validate(p));
+            flags.push(Model.Flag.validate(p));
         } catch (e) { }
     });
 
     user.roles.forEach(r => {
         (<Role>r).permissions.forEach(p => {
             try {
-                flags.push(Flag.validate(p));
+                flags.push(Model.Flag.validate(p));
             } catch (e) { }
         });
     });
@@ -110,28 +110,28 @@ async function flattenUser(user: UserEntry): Promise<Array<Flag>> {
     return _.uniq(flags);
 }
 
-function flattenRole(role: RoleEntry): Array<Flag> {
+function flattenRole(role: RoleEntry): Array<Model.Flag> {
 
-    const flags = new Array<Flag>();
+    const flags = new Array<Model.Flag>();
 
     role.permissions.forEach(p => {
         try {
-            flags.push(Flag.validate(p));
+            flags.push(Model.Flag.validate(p));
         } catch (e) { }
     });
 
     return _.uniq(flags);
 }
 
-function flagArray(perms: Array<string | Flag>, ignoreInvalid: boolean = false, removeDuplicate: boolean = true): Array<Flag> {
-    const valid = new Array<Flag>();
+function flagArray(perms: Array<string | Model.Flag>, ignoreInvalid: boolean = false, removeDuplicate: boolean = true): Array<Model.Flag> {
+    const valid = new Array<Model.Flag>();
     for (const p of perms) {
         if (ignoreInvalid) {
             try {
-                valid.push(Flag.validate(p));
+                valid.push(Model.Flag.validate(p));
             } catch (e) { }
         } else {
-            valid.push(Flag.validate(p));
+            valid.push(Model.Flag.validate(p));
         }
     }
     return removeDuplicate ? _.uniq(valid) : valid;
@@ -151,6 +151,7 @@ async function checkPermissions(req: any, ...required: Array<string>): Promise<M
     if (check.passed)
         return check;
     else
+        //@ts-ignore
         throw new PermissionError(check.missing);
 }
 
@@ -159,4 +160,4 @@ const permissions = async function (req: Request, res: Response, next: NextFunct
 
 };
 
-export { Flag, PermissionError, has, hasAll, validFlag, flattenUser, flattenRole, flagArray, checkPermissions, permissions };
+export { PermissionError, has, hasAll, validFlag, flattenUser, flattenRole, flagArray, checkPermissions, permissions };

@@ -1,7 +1,8 @@
 import assert from 'assert'
 import _ from 'lodash'
 
-import { has, hasAll, validFlag, flattenRole, flagArray, Flag } from '../dist/permission.js'
+import { has, hasAll, validFlag, flattenRole, flagArray } from '../dist/permission.js'
+import { Model } from 'ciam-commons'
 
 describe('permission', function () {
 
@@ -52,7 +53,7 @@ describe('permission', function () {
             ]
 
             for (const w of wildcards) {
-                assert.equal(Flag.validate(w).isWildcard, true)
+                assert.equal(Model.Flag.validate(w).isWildcard, true)
             }
         })
     })
@@ -61,7 +62,7 @@ describe('permission', function () {
         describe('#validate()', function () {
             it('Create Flag class from correct permission flag strings', function () {
                 for (const v of validFlagStrings) {
-                    assert.ok(Flag.validate(v))
+                    assert.ok(Model.Flag.validate(v))
                 }
             })
         })
@@ -113,10 +114,10 @@ describe('permission', function () {
 
             for (const { required, valid, invalid } of tests) {
                 for (const v of valid) {
-                    assert.ok(has(Flag.validate(required), Flag.validate(v)), `Failed on valid: ${v}`)
+                    assert.ok(has(Model.Flag.validate(required), Model.Flag.validate(v)), `Failed on valid: ${v}`)
                 }
                 for (const i of invalid) {
-                    assert.ok(!has(Flag.validate(required), Flag.validate(i)), `Failed on invalid: ${i}`)
+                    assert.ok(!has(Model.Flag.validate(required), Model.Flag.validate(i)), `Failed on invalid: ${i}`)
                 }
             }
 
