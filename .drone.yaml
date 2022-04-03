@@ -18,6 +18,7 @@ steps:
       - npm install --dev
       - npm install typescript -g
       - tsc
+      - sleep 5
       - npm test
 
 services:
