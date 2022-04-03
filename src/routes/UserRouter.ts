@@ -1,20 +1,35 @@
 import express, { Request, Response, NextFunction } from 'express';
 import sanitize from 'mongo-sanitize';
 import { User, UserEntry } from '../schemas/UserSchema.js';
-import { createToken, objectIdRegex } from '../utils.js';
+import { createToken, difference, flagValidator, objectIdRegex } from '../utils.js';
 import { checkPermissions } from '../permission.js';
-import { body, param } from 'express-validator';
+import { body, param, query } from 'express-validator';
 
 const UserRouter = express.Router();
 
 UserRouter.get('/valid', (req, res) => res.sendStatus(200));
 
-// TODO: Currently any role can be given, regardless of what permissions that role has
 UserRouter.post('/create',
     body('name').exists().isString(),
+    body('roles').optional().isArray(),
+    body('permissions').optional().isArray().custom(flagValidator),
     async (req, res) => {
         const { name, roles, permissions, discord } = req.body;
         const id = discord?.id;
+
+        if (permissions) {
+            //@ts-ignore
+            const required = permissions.map(f => `ciam.permission.grant.${f}`);
+            await checkPermissions(req, ...required);
+        }
+
+        if (roles) {
+            //@ts-ignore
+            const caller: User = req.__cache.user;
+            for (const r of roles)
+                if (!caller.roles.includes(r))
+                    return res.status(400).send('Missing role ' + r);
+        }
 
         const user = new User({
             name: name,
@@ -31,28 +46,40 @@ UserRouter.post('/create',
         res.send(op);
     });
 
-// TODO: Currently any role can be given, regardless of what permissions that role has
 UserRouter.post('/update',
     body('_id').exists().isString(),
     body('name').optional().notEmpty(),
     body('roles').optional().isArray(),
-    body('permissions').optional().isArray(),
+    body('permissions').optional().isArray().custom(flagValidator),
     async (req, res) => {
-        await checkPermissions(req, `ciam.role.update.${req.body._id}`);
-
         const { _id, name, roles, permissions } = req.body;
-        const user = await User.findById(_id);
+        await checkPermissions(req, `ciam.user.update.${_id}`);
 
+        const user = await User.findById(_id);
         if (!user) return res.status(404).send('User not found');
 
         if (permissions) {
-            await checkPermissions(req, permissions);
+            // Check if the user is allowed to give the provided permissions
+            const added = difference(permissions, user.permissions);
+            const removed = difference(user.permissions, permissions);
+
+            const required = new Array();
+            added.forEach(p => required.push(`ciam.permission.grant.${p}`));
+            removed.forEach(p => required.push(`ciam.permission.revoke.${p}`));
+
+            await checkPermissions(req, ...required);
             user.permissions = permissions;
         }
         if (name)
             user.name = name;
-        if (roles)
+        if (roles) {
+            //@ts-ignore
+            const caller: User = req.__cache.user;
+            for (const r of roles)
+                if (!caller.roles.includes(r))
+                    return res.status(400).send('Missing role ' + r);
             user.roles = roles;
+        }
 
         const op = await user.save();
         if (!op) res.sendStatus(500);
@@ -66,6 +93,27 @@ UserRouter.post('/update',
     //@ts-ignore
     return res.send(createToken(req.__cache.user));
 });*/
+
+UserRouter.get('/list',
+    query('page').isInt({ min: 0 }).default(0),
+    query('limit').isInt({ min: 1, max: 100 }).default(100),
+    async (req: Request, res: Response) => {
+        await checkPermissions(req, 'ciam.user.list');
+
+        //@ts-ignore
+        const { page, limit } = req.query as { page: number, limit: number; };
+
+        let query = User.find();
+        if (limit) {
+            query = query.limit(limit);
+            if (page > 0)
+                query = query.skip(page * limit);
+        }
+
+        const op = await query.exec();
+        if (!op) return res.sendStatus(500);
+        res.send(op);
+    });
 
 UserRouter.get('/:userId',
     param('userId').exists().isString().matches(objectIdRegex),
