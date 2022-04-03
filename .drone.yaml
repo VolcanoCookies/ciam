@@ -2,9 +2,12 @@ kind: pipeline
 type: kubernetes
 name: default
 
+metadata:
+  namespace: drone
+
 steps:
-- name: test
-  image: node:17
-  commands:
-  - npm install --dev
-  - npm test
+  - name: test
+    image: node:17
+    commands:
+      - npm install --dev
+      - npm test
