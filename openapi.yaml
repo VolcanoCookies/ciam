@@ -639,6 +639,51 @@ paths:
         '500':
           description: 'Failed saving permission to database'
 
+  /permission/upsert:
+    post:
+      security:
+        - bearerAuth: ['ciam.permission.upsert.{FLAG}']
+      summary: 'Upsert a permission'
+      description: |
+        Upserting tries to update a permission if it already exists, or create a new one if none was found
+        with the given flag.
+      tags:
+        - permission
+      requestBody:
+        description: 'The permission to upsert.'
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                flag:
+                  $ref: '#/components/schemas/FlagStrict'
+                  description: 'The flag to upsert'
+                name:
+                  type: string
+                  description: 'The pretty name of this flag'
+                description:
+                  type: string
+                  description: 'The description of this flag'
+              required:
+                - flag
+                - name
+                - description
+      responses:
+        '200':
+          description: 'The created/updated permission'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '400':
+          description: 'Invalid body'
+        '401':
+          description: 'Invalid token or missing permissions'
+        '500':
+          description: 'Failed saving permission to database'
+
   /permission/has:
     post:
       security:

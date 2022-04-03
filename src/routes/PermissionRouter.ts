@@ -3,9 +3,9 @@ import { body, param, query } from 'express-validator';
 import sanitize from 'mongo-sanitize';
 import { Permission } from '../schemas/PermissionSchema.js';
 import { Document, Types } from 'mongoose';
-import { stringToObjectIdArray, unique } from '../utils.js';
+import { flagValidator, stringToObjectIdArray, unique } from '../utils.js';
 import { User, UserEntry } from '../schemas/UserSchema.js';
-import { Flag, hasAll, flagArray, flattenUser, flattenRole, checkPermissions } from '../permission.js';
+import { hasAll, flagArray, flattenUser, flattenRole, checkPermissions } from '../permission.js';
 import { Role, RoleEntry } from '../schemas/RoleSchema.js';
 import { Check, Model } from 'ciam-commons';
 
@@ -23,6 +23,8 @@ PermissionRouter.post('/create',
         const path = flag.slice(0, Math.max(lastIndex, 0));
 
         await checkPermissions(req, `ciam.permission.create.${flag}`);
+
+        if (await Permission.findOne({ flag: flag })) return res.status(400).send('Permission already exists');
 
         const permission = new Permission({
             name: name,
@@ -121,10 +123,40 @@ PermissionRouter.post('/update',
         res.send(op);
     });
 
+
+PermissionRouter.post('/upsert',
+    body('flag').exists().isString().matches(Check.strictFlagRegex),
+    body('name').optional().isString().isLength({ min: 1 }),
+    body('description').optional().isString().isLength({ min: 1 }),
+    async (req, res) => {
+        //@ts-ignore
+        const { name, description, flag } = req.body;
+        await checkPermissions(req, `ciam.permission.upsert.${flag}`);
+
+        const lastIndex = flag.lastIndexOf('.');
+        const key = flag.slice(lastIndex + 1);
+        const path = flag.slice(0, Math.max(lastIndex, 0));
+
+        const op = await Permission.findOneAndUpdate({ flag: flag }, {
+            $set: {
+                name: name,
+                description: description,
+                key: key,
+                path: path
+            }
+        }, { upsert: true, returnDocument: 'after' });
+
+        console.log(op);
+
+        if (!op) return res.sendStatus(500);
+        res.send(op);
+    }
+);
+
 PermissionRouter.post('/has',
     body('type').isIn(['user', 'role', 'discordUser']),
     body('id').exists().matches(/[0-9a-f]{12,24}/),
-    body('required').exists().isArray({ min: 1 }),
+    body('required').exists().isArray({ min: 1 }).custom(flagValidator),
     body('additional').optional().isArray().default([]),
     body('includeMissing').optional().isBoolean().default(false),
     async (req: Request, res: Response) => {
