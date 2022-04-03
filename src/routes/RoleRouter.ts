@@ -3,15 +3,16 @@ import { body, query, param, Result } from 'express-validator';
 import sanitize from 'mongo-sanitize';
 import { Role } from '../schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
-import { checkPermissions, Flag, flagArray, PermissionError } from '../permission.js';
+import { checkPermissions, flagArray, PermissionError } from '../permission.js';
 import { Check } from 'ciam-commons';
+import { difference, flagValidator } from '../utils.js';
 
 const RoleRouter = express.Router();
 
 RoleRouter.post('/create',
     body('name').isString().notEmpty(),
     body('description').isString().notEmpty(),
-    body('permissions').optional().isArray(),
+    body('permissions').optional().isArray().custom(flagValidator),
     async (req: Request, res: Response) => {
         await checkPermissions(req, `ciam.role.create`);
 
@@ -55,26 +56,28 @@ RoleRouter.post('/update',
     body('_id').exists().isString().matches(Check.objectIdRegex),
     body('name').optional().isString().notEmpty(),
     body('description').optional().isString().notEmpty(),
-    body('permissions').optional().isArray().custom(v => {
-        return flagArray(v, false, true);
-    }),
+    body('permissions').optional().isArray().custom(flagValidator),
     async (req, res) => {
         const roleId = req.body._id;
-        const required = [`ciam.role.update.${roleId}`];
+        await checkPermissions(req, `ciam.role.update.${roleId}`);
 
         const role = await Role.findOne({ _id: roleId });
         if (!role) return res.status(404).send('Role not found');
 
         const { name, description, inherit, permissions } = req.body;
 
-        if (permissions)
-            for (const p of permissions)
-                required.push(p);
+        if (permissions) {
+            // Check if the user updating this role is allowed to give it the provided permissions
+            const added = difference(permissions, role.permissions);
+            const removed = difference(role.permissions, permissions);
 
-        await checkPermissions(req, ...required);
+            const required = new Array();
+            added.forEach(p => required.push(`ciam.permission.grant.${p}`));
+            removed.forEach(p => required.push(`ciam.permission.revoke.${p}`));
 
-        if (permissions)
+            await checkPermissions(req, ...required);
             role.set('permissions', flagArray(permissions));
+        }
         if (name)
             role.name = name;
         if (description)
