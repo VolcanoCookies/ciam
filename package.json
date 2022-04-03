@@ -16,6 +16,7 @@
     "@types/express-jwt": "^6.0.4",
     "@types/jsonwebtoken": "^8.5.8",
     "@types/lodash": "^4.14.180",
+    "@types/loglevel": "^1.6.3",
     "@types/mongo-sanitize": "^1.0.1",
     "@types/node-fetch": "^2.6.1",
     "chai": "^4.3.6",
@@ -25,6 +26,7 @@
     "typescript": "^4.6.2"
   },
   "dependencies": {
+    "chalk": "^5.0.1",
     "ciam-commons": "latest",
     "dotenv": "^16.0.0",
     "express": "^5.0.0-beta.1",
@@ -32,6 +34,8 @@
     "express-validator": "^6.14.0",
     "jsonwebtoken": "^8.5.1",
     "lodash": "^4.17.21",
+    "loglevel": "^1.8.0",
+    "loglevel-plugin-prefix": "^0.8.4",
     "mongo-sanitize": "^1.1.0",
     "mongoose": "^6.2.8",
     "node-fetch": "^3.2.3"
