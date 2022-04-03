@@ -11,9 +11,16 @@ environment:
   IS_DEV: true
   DATABASE_URL: 'mongodb://user:pass@mongo:27017/ciam-test?authSource=ciam-test&authMechanism=SCRAM-SHA-256'
 
+services:
+  - name: mongo
+    image: mongo:5
+    command: [--smallfiles]
+    ports:
+      - 27017
+
 steps:
   - name: mongo-version
-    image: mongo:5.0.6
+    image: mongo:5
     commands:
       - mongo mongo:27017 --eval "db.version()"
 
@@ -25,10 +32,3 @@ steps:
       - tsc
       - sleep 5
       - npm test
-
-services:
-  - name: mongo
-    image: mongo:5.0.6
-    command: [--smallfiles]
-    ports:
-      - 27017
