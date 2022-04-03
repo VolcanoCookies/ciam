@@ -19,10 +19,10 @@ import { Check, Model } from 'ciam-commons';
  */
 
 class PermissionError extends Error {
-    constructor(missing: Array<string> | Array<Flag> | undefined) {
-        super(`Missing permissions: ${(missing || []).join(', ')}`);
-        this.name = 'PermissionError';
-    }
+	constructor(missing: Array<string> | Array<Model.Flag> | undefined) {
+		super(`Missing permissions: ${(missing || []).join(', ')}`);
+		this.name = 'PermissionError';
+	}
 }
 
 /**
@@ -32,13 +32,13 @@ class PermissionError extends Error {
  * @returns true if {@link perm} is a valid permission flag.
  */
 function validFlag(perm: string): boolean {
-    if (perm.length == 0) return false;
-    try {
-        Check.flag(perm);
-        return true;
-    } catch (err) {
-        return false;
-    }
+	if (perm.length == 0) return false;
+	try {
+		Check.flag(perm);
+		return true;
+	} catch (err) {
+		return false;
+	}
 }
 
 /**
@@ -49,14 +49,14 @@ function validFlag(perm: string): boolean {
  * @returns true if {@link held} matches {@link required}.
  */
 function has(required: Model.Flag, held: Model.Flag): boolean {
-    if (required.length == 0 || held.length == 0) return false;
-    if (held.keys > required.keys) return false;
-    for (var i = 0; i < required.keys.length; i++) {
-        if (held.keys[i] == '*') return true;
-        else if (held.keys[i] == '?') continue;
-        else if (held.keys[i] != required.keys[i]) return false;
-    }
-    return true;
+	if (required.length == 0 || held.length == 0) return false;
+	if (held.keys > required.keys) return false;
+	for (var i = 0; i < required.keys.length; i++) {
+		if (held.keys[i] == '*') return true;
+		else if (held.keys[i] == '?') continue;
+		else if (held.keys[i] != required.keys[i]) return false;
+	}
+	return true;
 }
 
 /**
@@ -69,90 +69,90 @@ function has(required: Model.Flag, held: Model.Flag): boolean {
  * @returns true if all flags in {@link required} have at least 1 flag in {@link held} that matches.
  */
 function hasAll(required: Array<Model.Flag>, held: Array<Model.Flag>, returnMissing: boolean = false): Model.CheckResult {
-    if (returnMissing) {
-        const missing = required.filter(r => {
-            return !held.some(h => { return has(r, h); });
-        });
-        return {
-            passed: missing.length == 0,
-            missing: missing
-        };
-    } else {
-        return {
-            passed: required.every(r => {
-                return held.some(h => { return has(r, h); });
-            }),
-            missing: undefined
-        };
-    }
+	if (returnMissing) {
+		const missing = required.filter(r => {
+			return !held.some(h => { return has(r, h); });
+		});
+		return {
+			passed: missing.length == 0,
+			missing: missing
+		};
+	} else {
+		return {
+			passed: required.every(r => {
+				return held.some(h => { return has(r, h); });
+			}),
+			missing: undefined
+		};
+	}
 }
 
 async function flattenUser(user: UserEntry): Promise<Array<Model.Flag>> {
 
-    const flags = new Array<Model.Flag>();
+	const flags = new Array<Model.Flag>();
 
-    user = await user.populate<{ roles: Types.Array<Role>; }>('roles', 'permissions');
+	user = await user.populate<{ roles: Types.Array<Role>; }>('roles', 'permissions');
 
-    user.permissions.forEach(p => {
-        try {
-            flags.push(Model.Flag.validate(p));
-        } catch (e) { }
-    });
+	user.permissions.forEach(p => {
+		try {
+			flags.push(Model.Flag.validate(p));
+		} catch (e) { }
+	});
 
-    user.roles.forEach(r => {
-        (<Role>r).permissions.forEach(p => {
-            try {
-                flags.push(Model.Flag.validate(p));
-            } catch (e) { }
-        });
-    });
+	user.roles.forEach((r: any) => {
+		(<Role>r).permissions.forEach(p => {
+			try {
+				flags.push(Model.Flag.validate(p));
+			} catch (e) { }
+		});
+	});
 
-    return _.uniq(flags);
+	return _.uniq(flags);
 }
 
 function flattenRole(role: RoleEntry): Array<Model.Flag> {
 
-    const flags = new Array<Model.Flag>();
+	const flags = new Array<Model.Flag>();
 
-    role.permissions.forEach(p => {
-        try {
-            flags.push(Model.Flag.validate(p));
-        } catch (e) { }
-    });
+	role.permissions.forEach(p => {
+		try {
+			flags.push(Model.Flag.validate(p));
+		} catch (e) { }
+	});
 
-    return _.uniq(flags);
+	return _.uniq(flags);
 }
 
 function flagArray(perms: Array<string | Model.Flag>, ignoreInvalid: boolean = false, removeDuplicate: boolean = true): Array<Model.Flag> {
-    const valid = new Array<Model.Flag>();
-    for (const p of perms) {
-        if (ignoreInvalid) {
-            try {
-                valid.push(Model.Flag.validate(p));
-            } catch (e) { }
-        } else {
-            valid.push(Model.Flag.validate(p));
-        }
-    }
-    return removeDuplicate ? _.uniq(valid) : valid;
+	const valid = new Array<Model.Flag>();
+	for (const p of perms) {
+		if (ignoreInvalid) {
+			try {
+				valid.push(Model.Flag.validate(p));
+			} catch (e) { }
+		} else {
+			valid.push(Model.Flag.validate(p));
+		}
+	}
+	return removeDuplicate ? _.uniq(valid) : valid;
 }
 
 async function checkPermissions(req: any, ...required: Array<string>): Promise<Model.CheckResult> {
-    if (!req.__cache) req.__cache = {};
-    if (!req.__cache.user) {
-        const user = await User.findById(req.user.id);
-        if (!user) throw new PermissionError(required);
-        req.__cache.user = user;
-    }
-    if (!req.__cache.flags) {
-        req.__cache.flags = await flattenUser(req.__cache.user);
-    }
-    const check = hasAll(flagArray(required), req.__cache.flags, true);
-    if (check.passed)
-        return check;
-    else
-        //@ts-ignore
-        throw new PermissionError(check.missing);
+	if (!req.__cache) req.__cache = {};
+	if (!req.__cache.user) {
+		const user = await User.findById(req.user.id);
+		if (!user) throw new PermissionError(required);
+		req.__cache.user = user;
+	}
+	if (!req.__cache.flags) {
+		req.__cache.flags = await flattenUser(req.__cache.user);
+	}
+	const check = hasAll(flagArray(required), req.__cache.flags, true);
+	if (check.passed)
+		return check;
+	else
+		//@ts-ignore
+		throw new PermissionError(check.missing);
 }
 
 // Middleware function
