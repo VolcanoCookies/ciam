@@ -1,0 +1,10 @@
+kind: pipeline
+type: kubernetes
+name: default
+
+steps:
+- name: test
+  image: node:17
+  commands:
+  - npm install --dev
+  - npm test
