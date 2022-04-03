@@ -15,11 +15,16 @@ steps:
   - name: test
     image: node:17
     commands:
-      - npm install --dev
+      - npm install --include=dev
       - npm install typescript -g
       - tsc
       - sleep 5
       - npm test
+
+  - name: mongo-version
+    image: mongo:5.0.6
+    commands:
+      - mongo mongo:27017 --eval "db.version()"
 
 services:
   - name: mongo
