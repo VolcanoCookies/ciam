@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import { User } from './schemas/UserSchema.js';
 import jsonwebtoken from 'jsonwebtoken';
 import { Check } from 'ciam-commons';
+import { NextFunction, Request, Response } from 'express';
+import { validationResult } from 'express-validator';
 
 function stringToObjectIdArray(arr: Array<string>): Array<mongoose.Types.ObjectId> {
 
@@ -62,4 +64,13 @@ const strictFlagValidator = function (arr: Array<string>) {
     return arr.every(f => f.match(Check.strictFlagRegex));
 };
 
-export { stringToObjectIdArray, unique, createToken, objectIdRegex, difference, flagValidator, strictFlagValidator };
+const validate = function (req: Request, res: Response, next: NextFunction) {
+    const errors = validationResult(req);
+    if (errors.isEmpty())
+        next();
+    else {
+        res.status(400).send(errors);
+    }
+};
+
+export { stringToObjectIdArray, unique, createToken, objectIdRegex, difference, flagValidator, strictFlagValidator, validate };

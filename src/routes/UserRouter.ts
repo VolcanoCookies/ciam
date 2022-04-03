@@ -1,9 +1,9 @@
 import express, { Request, Response, NextFunction } from 'express';
-import sanitize from 'mongo-sanitize';
-import { User, UserEntry } from '../schemas/UserSchema.js';
-import { createToken, difference, flagValidator, objectIdRegex } from '../utils.js';
+import { User } from '../schemas/UserSchema.js';
+import { difference, flagValidator, validate } from '../utils.js';
 import { checkPermissions } from '../permission.js';
-import { body, param, query } from 'express-validator';
+import { body, param, query, validationResult } from 'express-validator';
+import { Check } from 'ciam-commons';
 
 const UserRouter = express.Router();
 
@@ -13,6 +13,7 @@ UserRouter.post('/create',
     body('name').exists().isString(),
     body('roles').optional().isArray(),
     body('permissions').optional().isArray().custom(flagValidator),
+    validate,
     async (req, res) => {
         const { name, roles, permissions, discord } = req.body;
         const id = discord?.id;
@@ -51,6 +52,7 @@ UserRouter.post('/update',
     body('name').optional().notEmpty(),
     body('roles').optional().isArray(),
     body('permissions').optional().isArray().custom(flagValidator),
+    validate,
     async (req, res) => {
         const { _id, name, roles, permissions } = req.body;
         await checkPermissions(req, `ciam.user.update.${_id}`);
@@ -97,6 +99,7 @@ UserRouter.post('/update',
 UserRouter.get('/list',
     query('page').isInt({ min: 0 }).default(0),
     query('limit').isInt({ min: 1, max: 100 }).default(100),
+    validate,
     async (req: Request, res: Response) => {
         await checkPermissions(req, 'ciam.user.list');
 
@@ -116,24 +119,28 @@ UserRouter.get('/list',
     });
 
 UserRouter.get('/:userId',
-    param('userId').exists().isString().matches(objectIdRegex),
+    param('userId').exists().isString().matches(Check.objectIdRegex, 'g'),
+    validate,
     async (req: Request, res: Response) => {
-        await checkPermissions(req, `ciam.user.get.${req.params.userId}`);
+        const userId = req.params.userId;
+        await checkPermissions(req, `ciam.user.get.${userId}`);
 
-        const op = await User.findOne({ _id: req.params.userId });
+        const op = await User.findOne({ _id: userId });
         if (!op) return res.status(404).send('User not found');
         res.send(op);
     });
 
 UserRouter.delete('/:userId',
-    param('userId').exists().isString(),
+    param('userId').exists().isString().matches(Check.objectIdRegex),
+    validate,
     async (req: Request, res: Response) => {
-        await checkPermissions(req, `ciam.user.delete.${req.params.userId}`);
+        const userId = req.params.userId;
+        await checkPermissions(req, `ciam.user.delete.${userId}`);
 
         //@ts-ignore
-        if (req.params.userId == `${req.__cache.user._id}`) return res.sendStatus(400);
+        if (userId == `${req.__cache.user._id}`) return res.sendStatus(400);
 
-        const op = await User.findByIdAndDelete(req.params.userId);
+        const op = await User.findByIdAndDelete(userId);
         if (!op) return res.status(404).send('User not found');
         res.send(op);
     });

@@ -3,7 +3,7 @@ import { body, param, query } from 'express-validator';
 import sanitize from 'mongo-sanitize';
 import { Permission } from '../schemas/PermissionSchema.js';
 import { Document, Types } from 'mongoose';
-import { flagValidator, stringToObjectIdArray, unique } from '../utils.js';
+import { flagValidator, stringToObjectIdArray, unique, validate } from '../utils.js';
 import { User, UserEntry } from '../schemas/UserSchema.js';
 import { hasAll, flagArray, flattenUser, flattenRole, checkPermissions } from '../permission.js';
 import { Role, RoleEntry } from '../schemas/RoleSchema.js';
@@ -15,6 +15,7 @@ PermissionRouter.post('/create',
     body('name').exists().isString(),
     body('description').exists().isString(),
     body('flag').exists().isString().matches(Check.strictFlagRegex),
+    validate,
     async (req: Request, res: Response) => {
         //@ts-ignore
         const { name, description, flag } = req.body;
@@ -53,24 +54,12 @@ interface ListQuery {
 }
 
 PermissionRouter.get('/me',
-    query('skip').isInt({ min: 0 }).default(0),
-    query('limit').isInt({ min: 1, max: 100 }).default(100),
+    validate,
     async (req: Request, res: Response) => {
         await checkPermissions(req, 'ciam.permission.me');
 
         //@ts-ignore
-        const { skip, limit } = req.query as ListQuery;
-
-        //@ts-ignore
         const user: UserEntry = await User.findById(req.user.id);
-        user.populate({
-            path: 'permissions',
-            options: {
-                limit: limit,
-                skip: skip
-            }
-        });
-
         res.send(user.permissions);
     }
 );
@@ -80,6 +69,7 @@ PermissionRouter.get('/list',
     query('skip').isInt({ min: 0 }).default(0),
     query('limit').isInt({ min: 1, max: 100 }).default(100),
     query('search').isString().notEmpty().matches(Check.flagRegex).default('*'),
+    validate,
     async (req: Request, res: Response) => {
         //@ts-ignore
         const { skip, limit, search } = req.query as { skip: number, limit: number, search: string; };
@@ -103,6 +93,7 @@ PermissionRouter.post('/update',
     body('flag').exists().isString().matches(Check.strictFlagRegex),
     body('name').optional().isString().isLength({ min: 1 }),
     body('description').optional().isString().isLength({ min: 1 }),
+    validate,
     async (req: Request, res: Response) => {
         const flag = req.body.flag;
 
@@ -128,6 +119,7 @@ PermissionRouter.post('/upsert',
     body('flag').exists().isString().matches(Check.strictFlagRegex),
     body('name').optional().isString().isLength({ min: 1 }),
     body('description').optional().isString().isLength({ min: 1 }),
+    validate,
     async (req, res) => {
         //@ts-ignore
         const { name, description, flag } = req.body;
@@ -159,6 +151,7 @@ PermissionRouter.post('/has',
     body('required').exists().isArray({ min: 1 }).custom(flagValidator),
     body('additional').optional().isArray().default([]),
     body('includeMissing').optional().isBoolean().default(false),
+    validate,
     async (req: Request, res: Response) => {
         const request = req.body as Model.CheckRequest;
 
@@ -195,6 +188,7 @@ PermissionRouter.post('/has',
 
 PermissionRouter.get('/:flag',
     param('flag').exists().matches(Check.strictFlagRegex),
+    validate,
     async (req: Request, res: Response) => {
         const flag = req.params.flag;
         await checkPermissions(req, `ciam.permission.get.${flag}`);
@@ -205,6 +199,7 @@ PermissionRouter.get('/:flag',
 
 PermissionRouter.delete('/:flag',
     param('flag').exists().matches(Check.strictFlagRegex),
+    validate,
     async (req: Request, res: Response) => {
         const flag = req.params.flag;
         await checkPermissions(req, `ciam.permission.get.${flag}`);
