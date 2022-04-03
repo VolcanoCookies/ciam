@@ -89,24 +89,22 @@ UserRouter.post('/update',
 	});
 
 UserRouter.get('/list',
-	query('page').isInt({ min: 0 }).default(0),
+	query('skip').isInt({ min: 0 }).default(0),
 	query('limit').isInt({ min: 1, max: 100 }).default(100),
 	validate,
 	async (req: Request, res: Response) => {
-		await checkPermissions(req, 'ciam.user.list');
-
 		//@ts-ignore
-		const { page, limit } = req.query as { page: number, limit: number; };
+		const { skip, limit } = req.query as { skip: number, limit: number; };
 
-		let query = User.find();
-		if (limit) {
-			query = query.limit(limit);
-			if (page > 0)
-				query = query.skip(page * limit);
-		}
+		await checkPermissions(req, `ciam.user.list`);
 
-		const op = await query.exec();
+		let query = User.find({})
+			.limit(limit)
+			.skip(skip);
+
+		const op = await query;
 		if (!op) return res.sendStatus(500);
+
 		res.send(op);
 	});
 
