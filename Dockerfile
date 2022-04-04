@@ -8,7 +8,7 @@ RUN npm install typescript -g
 
 WORKDIR /ciam
 COPY ./src src
-COPY project-lock.json project-lock.json
+COPY package-lock.json package-lock.json
 COPY tsconfig.json tsconfig.json
 
 RUN ls -la
