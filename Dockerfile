@@ -1,5 +1,5 @@
 FROM node:17
 
-RUN find . -maxdepth 2 -type d -ls
+RUN find . -maxdepth 4 -type d -ls
 
 COPY ./dist/* /ciam
