@@ -11,25 +11,14 @@ environment:
   IS_DEV: true
   DATABASE_URL: 'mongodb://user:pass@mongo:27017/ciam-test?authSource=ciam-test&authMechanism=SCRAM-SHA-256'
 
+steps:
+  - name: ping
+    image: mongo:4
+    commands:
+      - sleep 5
+      - mongo --eval "db.version()"
+
 services:
   - name: mongo
     image: mongo:4
     command: [--smallfiles]
-    ports:
-      - 27017
-
-steps:
-  - name: mongo-version
-    image: mongo:4
-    commands:
-      - sleep 10
-      - mongo --host mongo:27017 --eval "db.version()"
-
-  - name: test
-    image: node:17
-    commands:
-      - npm install --include=dev
-      - npm install typescript -g
-      - tsc
-      - sleep 5
-      - npm test
