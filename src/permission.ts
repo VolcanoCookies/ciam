@@ -155,9 +155,4 @@ async function checkPermissions(req: any, ...required: Array<string>): Promise<M
 		throw new PermissionError(check.missing);
 }
 
-// Middleware function
-const permissions = async function (req: Request, res: Response, next: NextFunction) {
-
-};
-
-export { PermissionError, has, hasAll, validFlag, flattenUser, flattenRole, flagArray, checkPermissions, permissions };
+export { PermissionError, has, hasAll, validFlag, flattenUser, flattenRole, flagArray, checkPermissions };
