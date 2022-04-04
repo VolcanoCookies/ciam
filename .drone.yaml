@@ -19,6 +19,7 @@ steps:
   - name: mongo-version
     image: mongo:5
     commands:
+      - while ! mongo ping --host mongo --silent; do sleep 1; done
       - mongo --host mongo:27017 --eval "db.version()"
 
   - name: test
