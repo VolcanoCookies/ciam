@@ -13,7 +13,7 @@ COPY tsconfig.json tsconfig.json
 
 RUN ls -la
 
-RUN npm install --include=dev
+RUN npm ci --include=dev
 RUN tsc
 
 FROM node:17-alpine
