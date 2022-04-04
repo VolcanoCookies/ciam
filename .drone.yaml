@@ -30,3 +30,8 @@ steps:
       - tsc
       - sleep 5
       - npm test
+
+  - name: build
+    image: docker:20
+    commands:
+      - docker build .
