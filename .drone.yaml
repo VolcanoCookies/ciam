@@ -9,7 +9,7 @@ environment:
   CLIENT_ID: 123456789
   CLIENT_SECRET: test-secret
   IS_DEV: true
-  DATABASE_URL: 'mongodb://user:pass@mongo:27017/ciam-test?authSource=ciam-test&authMechanism=SCRAM-SHA-256'
+  DATABASE_URL: 'mongodb://mongo:27017/ciam-test'
 
 services:
   - name: mongo
