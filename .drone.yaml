@@ -32,6 +32,9 @@ steps:
       - npm test
 
   - name: build
-    image: docker:20
-    commands:
-      - docker build .
+    image: plugins/docker
+    settings:
+      repo: volcanoinc/ciam-backend
+      tags: latest
+      auth:
+        from_secret: dockerhub-token
