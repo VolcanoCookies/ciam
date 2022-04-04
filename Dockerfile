@@ -9,6 +9,7 @@ RUN npm install typescript -g
 WORKDIR /ciam
 COPY ./src src
 COPY package-lock.json package-lock.json
+COPY package.json package.json
 COPY tsconfig.json tsconfig.json
 
 RUN ls -la
@@ -21,4 +22,4 @@ FROM node:17-alpine
 WORKDIR /ciam
 COPY --from=BUILD /ciam/dist /ciam
 
-ENTRYPOINT [ "node" ]
+ENTRYPOINT [ "node", "index.js" ]
