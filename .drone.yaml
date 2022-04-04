@@ -36,6 +36,6 @@ steps:
       repo: volcanoinc/ciam-backend
       tags: latest
       username:
-        fron_secret: DOCKER_HUB_USERNAME
+        from_secret: DOCKER_HUB_USERNAME
       password:
         from_secret: DOCKER_HUB_PASSWORD
