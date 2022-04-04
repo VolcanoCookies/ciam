@@ -22,6 +22,7 @@ steps:
   - name: mongo-version
     image: mongo:4
     commands:
+      - sleep 10
       - mongo --host mongo:27017 --eval "db.version()"
 
   - name: test
