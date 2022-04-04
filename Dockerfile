@@ -6,7 +6,7 @@ RUN npm install typescript -g
 #ENV GIT_SSH_COMMAND="ssh -i /key -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 #RUN git clone git@github.com:VolcanoCookies/ciam.git
 
-RUN ls
+RUN ls -la
 
 RUN npm install --include=dev
 RUN tsc
