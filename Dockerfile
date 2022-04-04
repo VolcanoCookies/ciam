@@ -1,5 +1,5 @@
 FROM node:17
 
-RUN find . -name "Dockerfile"
+RUN find . -name "permission*"
 
 COPY ./dist/* /ciam
