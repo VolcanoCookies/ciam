@@ -32,11 +32,10 @@ steps:
 
   - name: build
     image: plugins/docker
-    environment:
-      from_secret:
-        GITHUB_KEY: github-token
     settings:
       repo: volcanoinc/ciam-backend
       tags: latest
-      auth:
-        from_secret: dockerhub-token
+      username:
+        fron_secret: DOCKER_HUB_USERNAME
+      password:
+        from_secret: DOCKER_HUB_PASSWORD
