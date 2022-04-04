@@ -76,9 +76,6 @@ PermissionRouter.get('/list',
 		const op = await query;
 		if (!op) return res.sendStatus(500);
 
-		// Remove any flags the user is not allowed to see
-		const check = hasAll;
-
 		res.send(op);
 	});
 
