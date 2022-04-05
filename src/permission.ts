@@ -1,5 +1,5 @@
 import { User, UserEntry } from './schemas/UserSchema.js';
-import { Role, RoleEntry, RoleMode } from './schemas/RoleSchema.js';
+import { Role, RoleEntry } from './schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
 import _ from 'lodash';
 import { Request, Response, NextFunction } from 'express';
