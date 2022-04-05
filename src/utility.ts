@@ -14,9 +14,9 @@ async function request(path: string): Promise<Response> {
 }
 
 async function getUserRoles(userId: string): Promise<Array<string>> {
-	const res = await request(`/users/${userId}`);
-	const json: any = await res.json();
-	return json.roles || [];
+	return request(`/users/${userId}`).then(res => res.json())
+		.then((json: any) => json.roles)
+		.catch(err => new Array());
 }
 
 export { getUserRoles };
