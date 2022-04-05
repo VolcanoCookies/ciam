@@ -1,9 +1,10 @@
 import { User, UserEntry } from './schemas/UserSchema.js';
-import { Role, RoleEntry } from './schemas/RoleSchema.js';
+import { Role, RoleEntry, RoleMode } from './schemas/RoleSchema.js';
 import { Document, Types } from 'mongoose';
 import _ from 'lodash';
 import { Request, Response, NextFunction } from 'express';
 import { Check, Model } from 'ciam-commons';
+import { getUserRoles } from './utility.js';
 
 /**
  * Rules for permissions:
@@ -89,23 +90,34 @@ function hasAll(required: Array<Model.Flag>, held: Array<Model.Flag>, returnMiss
 
 async function flattenUser(user: UserEntry): Promise<Array<Model.Flag>> {
 
-	const flags = new Array<Model.Flag>();
+	let flags = new Array<Model.Flag>();
 
-	user = await user.populate<{ roles: Types.Array<Role>; }>('roles', 'permissions');
-
-	user.permissions.forEach(p => {
-		try {
-			flags.push(Model.Flag.validate(p));
-		} catch (e) { }
+	const roles = await Role.find({
+		_id: {
+			$in: user.roles
+		}
 	});
+	const roleFlags = roles.flatMap(r => r.permissions);
 
-	user.roles.forEach((r: any) => {
-		(<Role>r).permissions.forEach(p => {
-			try {
-				flags.push(Model.Flag.validate(p));
-			} catch (e) { }
+	flags = flags.concat(flagArray(roleFlags, true, false));
+	flags = flags.concat(flagArray(user.permissions, true, false));
+
+	if (user.discord?.id) {
+		const discordRoleIds = await getUserRoles(user.discord.id);
+		const discordRoles = await Role.find({
+			'discord.roles': {
+				$in: discordRoleIds
+			}
+		}, {
+			projections: {
+				discord: 1,
+				permissions: 1
+			}
 		});
-	});
+
+		const discordFlags = discordRoles.flatMap(r => r.permissions);
+		flags = flags.concat(flagArray(discordFlags, true, false));
+	}
 
 	return _.uniq(flags);
 }
