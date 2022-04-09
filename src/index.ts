@@ -103,6 +103,7 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 app.listen(process.env.PORT, async () => {
 	await init();
 	log.info(`Started listening on port ${process.env.PORT}`);
+	log.info(`Callback set to "${process.env.REDIRECT}"`);
 });
 
 export { app };
