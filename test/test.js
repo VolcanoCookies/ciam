@@ -92,7 +92,7 @@ describe('permission', function () {
 	})
 
 	describe('#flattenUser()', function () {
-		it('should return role permissions too', async function (done) {
+		it('should return role permissions too', async function () {
 			const role = await new Role({
 				name: 'test',
 				description: 'test',
@@ -104,10 +104,9 @@ describe('permission', function () {
 				roles: [role._id]
 			}).save()
 
-			const flags = await flattenUser(user)
+			const flags = (await flattenUser(user)).map(f => `${f}`)
 			flags.should.include('user.perm')
 			flags.should.include('role.perm')
-			done()
 		})
 	})
 
