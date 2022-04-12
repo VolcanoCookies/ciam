@@ -1,4 +1,4 @@
-# ciam
+# CIAM
 
 [![Build Status](https://drone.centralmind.net/api/badges/VolcanoCookies/ciam/status.svg)](https://drone.centralmind.net/VolcanoCookies/ciam)
 
@@ -12,3 +12,4 @@
 | IS_DEV                | If we are running in a dev environment   |
 | DATABASE_URL          | Url for connecting to the mongo database |
 | PORT                  | What port to open the api on             |
+| JWT_SECRET            | Secret for signing jwts                  |
