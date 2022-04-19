@@ -713,6 +713,105 @@ paths:
         '404':
           description: 'Entity specified by id field was not found'
 
+  /login:
+    get:
+      summary: 'Redirect endpoint for OAuth'
+      description: |
+        Once the user has completed the Oauth2 flow they will be redirected to the `returnUrl`, they will have a cookie
+        set for the domain `domain`, this cookie can be used to access the users information.
+      tags:
+        - auth
+      parameters:
+        - in: query
+          name: returnUrl
+          description: 'The url to return to after the user has completed oauth'
+          required: true
+          schema:
+            # TODO: Create a schema for urls?
+            type: string
+        - in: query
+          name: domain
+          description: 'The domain to set the auth cookie for, this should be your websites domain'
+          required: true
+          schema:
+            # TODO: Create a schema for urls?
+            type: string
+        - in: query
+          name: scope
+          description: 'The scope you are requesting for a user, currently only "identify"'
+          required: true
+          schema:
+            # TODO: Create a schema for scopes?
+            type: string
+        - in: query
+          name: client
+          description: 'Client id of your application'
+          required: true
+          schema:
+            $ref: '#/components/schemas/ObjectId'
+      responses:
+        '302':
+          description: 'Redirect to discord OAuth2'
+        '400':
+          description: 'Bad request'
+
+  /auth/user:
+    get:
+      summary: 'Get user'
+      description: |
+        Get a user from the access token.
+      tags:
+        - auth
+      parameters:
+        - in: header
+          name: ciam_token
+          description: 'The access token'
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 'Redirect to discord OAuth2'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    $ref: '#/components/schemas/ObjectId'
+                    description: 'User id'
+                  username:
+                    type: string
+                    description: 'Username'
+                  discord:
+                    $ref: '#/components/schemas/UserDiscord'
+        '400':
+          description: 'Bad request'
+        '401':
+          description: 'Invalid token or missing permissions'
+
+  /auth/refresh:
+    get:
+      summary: 'Refresh access token'
+      description: |
+        Refresh an access token for a user.
+      tags:
+        - auth
+      parameters:
+        - in: query
+          name: refreshToken
+          description: 'The refresh token'
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: 'Redirect to discord OAuth2'
+        '400':
+          description: 'Bad request'
+        '500':
+          description: 'Error creating new token'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -764,6 +863,21 @@ components:
         - description
         - permissions
         - creator
+    UserDiscord:
+      type: object
+      description: 'User discord data'
+      properties:
+        id:
+          $ref: '#/components/schemas/DiscordId'
+          description: 'Discord id'
+        name:
+          type: string
+          description: 'Discord username'
+        discriminator:
+          type: string
+          description: 'Discord discriminator'
+      required:
+        - id
     User:
       type: object
       description: 'A user can have both permissions and roles, and can be tied to a discord user, or be standalone'
@@ -788,12 +902,7 @@ components:
             $ref: '#/components/schemas/Flag'
           description: 'List of permission flags this user has'
         discord:
-          type: object
-          properties:
-            id:
-              $ref: '#/components/schemas/DiscordId'
-          required:
-            - id
+          $ref: '#/components/schemas/UserDiscord'
       required:
         - _id
         - name
