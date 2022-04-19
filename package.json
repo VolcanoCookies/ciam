@@ -20,6 +20,7 @@
 		"@types/lodash": "^4.14.180",
 		"@types/loglevel": "^1.6.3",
 		"@types/mongo-sanitize": "^1.0.1",
+		"@types/node": "^17.0.23",
 		"@types/node-fetch": "^2.6.1",
 		"chai": "^4.3.6",
 		"chai-http": "^4.3.0",
