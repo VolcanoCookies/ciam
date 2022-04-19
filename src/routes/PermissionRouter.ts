@@ -1,21 +1,21 @@
-import express, { Request, response, Response } from 'express';
+import { discordIdRegex, flagRegex, objectIdRegex, strictFlagRegex } from 'ciam-commons/Check';
+import { CheckRequest } from 'ciam-commons/Model';
+import { Flag, flagArray } from 'ciam-commons/Permission';
+import express, { Request, Response } from 'express';
 import { body, param, query } from 'express-validator';
-import sanitize from 'mongo-sanitize';
+import { checkPermissions, flattenRole, flattenUser, hasAll } from '../permission.js';
 import { Permission } from '../schemas/PermissionSchema.js';
-import { Document, Types } from 'mongoose';
-import { flagValidator, stringToObjectIdArray, unique, validate } from '../utils.js';
+import { Role } from '../schemas/RoleSchema.js';
 import { User, UserEntry } from '../schemas/UserSchema.js';
-import { hasAll, flagArray, flattenUser, flattenRole, checkPermissions } from '../permission.js';
-import { Role, RoleEntry } from '../schemas/RoleSchema.js';
-import { Check, Model } from 'ciam-commons';
+import { getUserRoles } from '../utility.js';
+import { flagValidator } from '../utils.js';
 
 const PermissionRouter = express.Router();
 
 PermissionRouter.post('/create',
 	body('name').exists().isString(),
 	body('description').exists().isString(),
-	body('flag').exists().isString().matches(Check.strictFlagRegex),
-	validate,
+	body('flag').exists().isString().matches(strictFlagRegex),
 	async (req: Request, res: Response) => {
 		//@ts-ignore
 		const { name, description, flag } = req.body;
@@ -48,12 +48,11 @@ function toRegex(permission: string): RegExp {
 }
 
 PermissionRouter.get('/me',
-	validate,
 	async (req: Request, res: Response) => {
 		await checkPermissions(req, 'ciam.permission.me');
 
 		//@ts-ignore
-		const user: UserEntry = await User.findById(req.user.id);
+		const user: UserEntry = await User.findById(req.user._id);
 		res.send(user.permissions);
 	});
 
@@ -61,8 +60,7 @@ PermissionRouter.get('/me',
 PermissionRouter.get('/list',
 	query('skip').isInt({ min: 0 }).default(0),
 	query('limit').isInt({ min: 1, max: 100 }).default(100),
-	query('search').isString().notEmpty().matches(Check.flagRegex).default('*'),
-	validate,
+	query('search').isString().notEmpty().matches(flagRegex).default('*'),
 	async (req: Request, res: Response) => {
 		//@ts-ignore
 		const { skip, limit, search } = req.query as { skip: number, limit: number, search: string; };
@@ -80,10 +78,9 @@ PermissionRouter.get('/list',
 	});
 
 PermissionRouter.post('/update',
-	body('flag').exists().isString().matches(Check.strictFlagRegex),
+	body('flag').exists().isString().matches(strictFlagRegex),
 	body('name').optional().isString().isLength({ min: 1 }),
 	body('description').optional().isString().isLength({ min: 1 }),
-	validate,
 	async (req: Request, res: Response) => {
 		const flag = req.body.flag;
 
@@ -105,10 +102,9 @@ PermissionRouter.post('/update',
 	});
 
 PermissionRouter.post('/upsert',
-	body('flag').exists().isString().matches(Check.strictFlagRegex),
+	body('flag').exists().isString().matches(strictFlagRegex),
 	body('name').optional().isString().isLength({ min: 1 }),
 	body('description').optional().isString().isLength({ min: 1 }),
-	validate,
 	async (req, res) => {
 		//@ts-ignore
 		const { name, description, flag } = req.body;
@@ -135,34 +131,49 @@ PermissionRouter.post('/upsert',
 
 PermissionRouter.post('/has',
 	body('type').isIn(['user', 'role', 'discordUser']),
-	body('id').exists().matches(/[0-9a-f]{12,24}/),
+	body('id').exists().custom((v: string) => objectIdRegex.test(v) || discordIdRegex.test(v)),
 	body('required').exists().isArray({ min: 1 }).custom(flagValidator),
 	body('additional').optional().isArray().default([]),
 	body('includeMissing').optional().isBoolean().default(false),
-	validate,
 	async (req: Request, res: Response) => {
-		const request = req.body as Model.CheckRequest;
+		const request = req.body as CheckRequest;
 
-		let subject: UserEntry | RoleEntry | null = null;
+		let flags: Array<Flag> | undefined = undefined;
 
 		switch (request.type) {
 			case 'user': {
-				subject = await User.findOne({ _id: request.id });
+				const user = await User.findOne({ _id: request.id });
+				if (user) flags = await flattenUser(user);
 				break;
 			}
 			case 'role': {
-				subject = await Role.findOne({ _id: request.id });
+				const role = await Role.findOne({ _id: request.id });
+				if (role) flags = flattenRole(role);
 				break;
 			}
 			case 'discordUser': {
-				subject = await User.findOne({ 'discord.id': request.id });
+				const user = await User.findOne({ 'discord.id': request.id });
+				if (user) flags = await flattenUser(user);
+				else {
+					const discordRoleIds = await getUserRoles(request.id);
+					const discordRoles = await Role.find({
+						'discord.roles': {
+							$in: discordRoleIds
+						}
+					}, {
+						projections: {
+							discord: 1,
+							permissions: 1
+						}
+					});
+
+					flags = flagArray(discordRoles.flatMap(r => r.permissions), true, true);
+				}
 				break;
 			}
 		}
 
-		if (!subject) return res.status(404).send(`${request.type} not found`);
-
-		const flags = (subject instanceof User) ? await flattenUser(subject as UserEntry) : flattenRole(subject as RoleEntry);
+		if (!flags) return res.status(401).send(`${request.type} not found`);
 
 		const required = flagArray(request.required, false, true);
 		const checkCanCheck = required.map(r => `ciam.permissions.has.${r}`);
@@ -175,8 +186,7 @@ PermissionRouter.post('/has',
 	});
 
 PermissionRouter.get('/:flag',
-	param('flag').exists().matches(Check.strictFlagRegex),
-	validate,
+	param('flag').exists().matches(strictFlagRegex),
 	async (req: Request, res: Response) => {
 		const flag = req.params.flag;
 		await checkPermissions(req, `ciam.permission.get.${flag}`);
@@ -186,8 +196,7 @@ PermissionRouter.get('/:flag',
 	});
 
 PermissionRouter.delete('/:flag',
-	param('flag').exists().matches(Check.strictFlagRegex),
-	validate,
+	param('flag').exists().matches(strictFlagRegex),
 	async (req: Request, res: Response) => {
 		const flag = req.params.flag;
 		await checkPermissions(req, `ciam.permission.get.${flag}`);
@@ -197,3 +206,4 @@ PermissionRouter.delete('/:flag',
 	});
 
 export { PermissionRouter };
+

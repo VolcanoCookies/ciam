@@ -1,11 +1,11 @@
-import express, { Request, Response, NextFunction } from 'express';
-import { body, query, param, Result } from 'express-validator';
-import sanitize from 'mongo-sanitize';
+import { objectIdRegex } from 'ciam-commons/Check';
+import { flagArray } from 'ciam-commons/Permission';
+import { difference } from 'ciam-commons/utils';
+import express, { Request, Response } from 'express';
+import { body, param, query } from 'express-validator';
+import { checkPermissions } from '../permission.js';
 import { Role } from '../schemas/RoleSchema.js';
-import { Document, Types } from 'mongoose';
-import { checkPermissions, flagArray, PermissionError } from '../permission.js';
-import { Check } from 'ciam-commons';
-import { difference, flagValidator, validate } from '../utils.js';
+import { flagValidator } from '../utils.js';
 
 const RoleRouter = express.Router();
 
@@ -13,7 +13,6 @@ RoleRouter.post('/create',
 	body('name').isString().notEmpty(),
 	body('description').isString().notEmpty(),
 	body('permissions').optional().isArray().custom(flagValidator),
-	validate,
 	async (req: Request, res: Response) => {
 		await checkPermissions(req, `ciam.role.create`);
 
@@ -23,8 +22,7 @@ RoleRouter.post('/create',
 			name: name,
 			description: description,
 			permissions: permissions || [],
-			//@ts-ignore
-			creator: req.__cache.user._id
+			creator: req.user._id
 		});
 
 		const op = await role.save();
@@ -35,7 +33,6 @@ RoleRouter.post('/create',
 RoleRouter.get('/list',
 	query('skip').isInt({ min: 0 }).default(0),
 	query('limit').isInt({ min: 1, max: 100 }).default(100),
-	validate,
 	async (req: Request, res: Response) => {
 		//@ts-ignore
 		const { skip, limit } = req.query as { skip: number, limit: number; };
@@ -53,11 +50,10 @@ RoleRouter.get('/list',
 	});
 
 RoleRouter.post('/update',
-	body('_id').exists().isString().matches(Check.objectIdRegex),
+	body('_id').exists().isString().matches(objectIdRegex),
 	body('name').optional().isString().notEmpty(),
 	body('description').optional().isString().notEmpty(),
 	body('permissions').optional().isArray().custom(flagValidator),
-	validate,
 	async (req, res) => {
 		const roleId = req.body._id;
 		await checkPermissions(req, `ciam.role.update.${roleId}`);
@@ -92,8 +88,7 @@ RoleRouter.post('/update',
 	});
 
 RoleRouter.get('/:roleId',
-	param('roleId').exists().isString().matches(Check.objectIdRegex),
-	validate,
+	param('roleId').exists().isString().matches(objectIdRegex),
 	async (req: Request, res: Response) => {
 		const roleId = req.params.roleId;
 		await checkPermissions(req, `ciam.role.get.${roleId}`);
@@ -103,8 +98,7 @@ RoleRouter.get('/:roleId',
 	});
 
 RoleRouter.delete('/:roleId',
-	param('roleId').exists().isString().matches(Check.objectIdRegex),
-	validate,
+	param('roleId').exists().isString().matches(objectIdRegex),
 	async (req: Request, res: Response) => {
 		const roleId = req.params.roleId;
 		await checkPermissions(req, `ciam.role.delete.${roleId}`);
@@ -114,3 +108,4 @@ RoleRouter.delete('/:roleId',
 	});
 
 export { RoleRouter };
+

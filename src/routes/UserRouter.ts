@@ -1,9 +1,10 @@
-import express, { Request, Response, NextFunction } from 'express';
-import { User } from '../schemas/UserSchema.js';
-import { difference, flagValidator, validate } from '../utils.js';
+import { objectIdRegex } from 'ciam-commons/Check';
+import { difference } from 'ciam-commons/Utils';
+import express, { Request, Response } from 'express';
+import { body, param, query } from 'express-validator';
 import { checkPermissions } from '../permission.js';
-import { body, param, query, validationResult } from 'express-validator';
-import { Check } from 'ciam-commons';
+import { User } from '../schemas/UserSchema.js';
+import { flagValidator } from '../utils.js';
 
 const UserRouter = express.Router();
 
@@ -13,7 +14,6 @@ UserRouter.post('/create',
 	body('name').exists().isString(),
 	body('roles').optional().isArray(),
 	body('permissions').optional().isArray().custom(flagValidator),
-	validate,
 	async (req, res) => {
 		const { name, roles, permissions, discord } = req.body;
 		const id = discord?.id;
@@ -25,10 +25,8 @@ UserRouter.post('/create',
 		}
 
 		if (roles) {
-			//@ts-ignore
-			const caller: User = req.__cache.user;
 			for (const r of roles)
-				if (!caller.roles.includes(r))
+				if (!req.user.roles.includes(r))
 					return res.status(400).send('Missing role ' + r);
 		}
 
@@ -52,7 +50,6 @@ UserRouter.post('/update',
 	body('name').optional().notEmpty(),
 	body('roles').optional().isArray(),
 	body('permissions').optional().isArray().custom(flagValidator),
-	validate,
 	async (req, res) => {
 		const { _id, name, roles, permissions } = req.body;
 		await checkPermissions(req, `ciam.user.update.${_id}`);
@@ -75,10 +72,8 @@ UserRouter.post('/update',
 		if (name)
 			user.name = name;
 		if (roles) {
-			//@ts-ignore
-			const caller: User = req.__cache.user;
 			for (const r of roles)
-				if (!caller.roles.includes(r))
+				if (!req.user.roles.includes(r))
 					return res.status(400).send('Missing role ' + r);
 			user.roles = roles;
 		}
@@ -91,7 +86,6 @@ UserRouter.post('/update',
 UserRouter.get('/list',
 	query('skip').isInt({ min: 0 }).default(0),
 	query('limit').isInt({ min: 1, max: 100 }).default(100),
-	validate,
 	async (req: Request, res: Response) => {
 		//@ts-ignore
 		const { skip, limit } = req.query as { skip: number, limit: number; };
@@ -109,8 +103,7 @@ UserRouter.get('/list',
 	});
 
 UserRouter.get('/:userId',
-	param('userId').exists().isString().matches(Check.objectIdRegex, 'g'),
-	validate,
+	param('userId').exists().isString().matches(objectIdRegex),
 	async (req: Request, res: Response) => {
 		const userId = req.params.userId;
 		await checkPermissions(req, `ciam.user.get.${userId}`);
@@ -121,14 +114,13 @@ UserRouter.get('/:userId',
 	});
 
 UserRouter.delete('/:userId',
-	param('userId').exists().isString().matches(Check.objectIdRegex),
-	validate,
+	param('userId').exists().isString().matches(objectIdRegex),
 	async (req: Request, res: Response) => {
 		const userId = req.params.userId;
 		await checkPermissions(req, `ciam.user.delete.${userId}`);
 
 		//@ts-ignore
-		if (userId == `${req.__cache.user._id}`) return res.sendStatus(400);
+		if (userId == `${req.user._id}`) return res.sendStatus(400);
 
 		const op = await User.findByIdAndDelete(userId);
 		if (!op) return res.status(404).send('User not found');
@@ -136,3 +128,4 @@ UserRouter.delete('/:userId',
 	});
 
 export { UserRouter };
+

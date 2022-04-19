@@ -1,18 +1,19 @@
+import chalk from 'chalk';
+import cors from 'cors';
 import 'dotenv/config';
-import express, { Request, Response, NextFunction } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
+import jwt from 'express-jwt';
+import log from 'loglevel';
+import prefix from 'loglevel-plugin-prefix';
 import sanitize from 'mongo-sanitize';
 import mongoose from 'mongoose';
+import { flattenUser } from './permission.js';
+import { AuthRouter, PublicAuthRouter } from './routes/AuthRouter.js';
 import { PermissionRouter } from './routes/PermissionRouter.js';
 import { RoleRouter } from './routes/RoleRouter.js';
-import { AuthRouter } from './routes/AuthRouter.js';
-import jwt from 'express-jwt';
 import { UserRouter } from './routes/UserRouter.js';
-import { User } from './schemas/UserSchema.js';
-import log from 'loglevel';
-import chalk from 'chalk';
-import prefix from 'loglevel-plugin-prefix';
-import { createToken } from './utils.js';
-import cors from 'cors';
+import { User, UserEntry, UserType } from './schemas/UserSchema.js';
+import { createToken, validate } from './utils.js';
 
 log.setLevel(process.env.IS_DEV ? log.levels.DEBUG : log.levels.INFO);
 
@@ -40,23 +41,27 @@ const init = async () => {
 	const filter = { _id: '000000000000000000000000' };
 	const update = {
 		name: 'SYSTEM',
-		permissions: ['*']
+		permissions: ['*'],
+		type: UserType.SYSTEM
 	};
 
 	//@ts-ignore
 	const systemUser: User = await User.findOneAndUpdate(filter, update, { upsert: true });
-	log.info('Upserted SYSTEM user with token "' + createToken(systemUser) + '"');
+	log.info(`Upserted SYSTEM user with token "${createToken(systemUser)}"`);
 };
 
 const app = express();
+const PublicRoutes = express.Router();
+const PrivateRoutes = express.Router();
 
 app.use(cors({
 	origin: '*'
 }));
 
 app.use(jwt({
-	secret: process.env.CLIENT_SECRET as string,
-	algorithms: ['HS256']
+	secret: process.env.JWT_SECRET as string,
+	algorithms: ['HS256'],
+	requestProperty: 'auth'
 }).unless({ path: ['/login', '/callback'] }));
 
 app.use((req, res, next) => {
@@ -65,6 +70,18 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+	//@ts-ignore
+	const userId = req?.auth?.id;
+	if (userId) {
+		const user = await User.findById(userId);
+		if (!user) return res.status(401).send('Invalid token');
+		req.user = user as User;
+		req.flags = await flattenUser(user as UserEntry);
+	}
+	next();
+});
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 	if (err.name === 'UnauthorizedError') {
@@ -76,24 +93,26 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 	next();
 });
 
-app.use(AuthRouter);
-
-app.use(async (req, res, next) => {
-	if (!req.user)
-		return res.status(401).send('invalid token');
-	//@ts-ignore
-	log.info(req.ip, '|', req.user.id, '|', req.method, req.url);
+PrivateRoutes.use(async (req: Request, res, next) => {
+	log.info(req.ip, '|', req.user._id.toString(), '|', req.method, req.url);
 	next();
 });
 
-app.use('/role', RoleRouter);
-app.use('/permission', PermissionRouter);
-app.use('/user', UserRouter);
+PublicRoutes.use(PublicAuthRouter);
+PrivateRoutes.use('/auth', AuthRouter);
+PrivateRoutes.use('/role', RoleRouter);
+PrivateRoutes.use('/permission', PermissionRouter);
+PrivateRoutes.use('/user', UserRouter);
+
+app.use(PublicRoutes);
+app.use(PrivateRoutes);
+
+app.use(validate);
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 	console.log(err.name);
 	if (err.name === 'PermissionError')
-		res.status(401).send(err.message);
+		res.status(401).send(err);
 	else if (err) {
 		log.error(err);
 		res.sendStatus(400);
