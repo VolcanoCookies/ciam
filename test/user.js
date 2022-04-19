@@ -97,13 +97,6 @@ describe('Users', function () {
                     done()
                 })
         })
-        it('should return 401 with a invalid token', function (done) {
-            get('/user/valid', testUser)
-                .end((err, res) => {
-                    res.should.have.status(200)
-                    done()
-                })
-        })
     })
 
     describe('/GET', function () {
@@ -137,6 +130,7 @@ describe('Users', function () {
         it('should prevent unauthorized user from deleting another user', function (done) {
             del(`/user/${botUser._id}`, testUser)
                 .end((err, res) => {
+					console.log(err)
                     res.should.have.status(401)
                     done()
                 })

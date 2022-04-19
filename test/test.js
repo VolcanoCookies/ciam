@@ -1,10 +1,10 @@
 import assert from 'assert'
+import { Flag } from 'ciam-commons/permissions'
 import _ from 'lodash'
-
-import { has, hasAll, validFlag, flattenRole, flagArray, flattenUser } from '../dist/permission.js'
-import { Model } from 'ciam-commons'
-import { User } from '../dist/schemas/UserSchema.js'
+import { flattenRole, flattenUser, has, hasAll } from '../dist/permission.js'
 import { Role } from '../dist/schemas/RoleSchema.js'
+import { User } from '../dist/schemas/UserSchema.js'
+
 
 describe('permission', function () {
 
@@ -55,7 +55,7 @@ describe('permission', function () {
 			]
 
 			for (const w of wildcards) {
-				assert.equal(Model.Flag.validate(w).isWildcard, true)
+				assert.equal(Flag.validate(w).isWildcard, true)
 			}
 		})
 	})
