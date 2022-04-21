@@ -8,7 +8,9 @@ import { flagValidator } from '../utils.js';
 
 const UserRouter = express.Router();
 
-UserRouter.get('/valid', (req, res) => res.sendStatus(200));
+UserRouter.get('/me', (req, res) => {
+	return res.status(200).send(req.user);
+});
 
 UserRouter.post('/create',
 	body('name').exists().isString(),

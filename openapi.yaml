@@ -410,17 +410,21 @@ paths:
         '500':
           description: 'Failed saving user to database'
 
-  /user/valid:
+  /user/me:
     get:
-      summary: 'Validate own token'
-      description: 'Just requires you to have a valid token, no permissions.'
+      summary: 'Get own user'
+      description: 'Get your own user data, can be useful for validating that the token is valid since this endpoint requires no further permissions.'
       tags:
         - user
       responses:
         '200':
-          description: 'Your token is valid'
+          description: 'Returns own user'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
         '401':
-          description: 'Your token is missing or invalid'
+          description: 'Invalid token or missing permissions'
 
   /permission/{flag}:
     get:
