@@ -1,4 +1,4 @@
-import { flagRegex, strictFlagRegex } from 'ciam-commons/checks';
+import { flagRegex, strictFlagRegex } from 'ciam-commons';
 import { NextFunction, Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import jsonwebtoken from 'jsonwebtoken';

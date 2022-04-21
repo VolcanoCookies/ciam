@@ -1,5 +1,4 @@
-import { CheckResult } from 'ciam-commons/Model';
-import { Flag, flagArray } from 'ciam-commons/Permission';
+import { CheckResult, Flag, flagArray } from 'ciam-commons';
 import _ from 'lodash';
 import { Role, RoleEntry } from './schemas/RoleSchema.js';
 import { UserEntry } from './schemas/UserSchema.js';

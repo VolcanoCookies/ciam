@@ -1,6 +1,4 @@
-import { discordIdRegex, flagRegex, objectIdRegex, strictFlagRegex } from 'ciam-commons/Check';
-import { CheckRequest } from 'ciam-commons/Model';
-import { Flag, flagArray } from 'ciam-commons/Permission';
+import { CheckRequest, discordIdRegex, Flag, flagArray, flagRegex, objectIdRegex, strictFlagRegex } from 'ciam-commons';
 import express, { Request, Response } from 'express';
 import { body, param, query } from 'express-validator';
 import { checkPermissions, flattenRole, flattenUser, hasAll } from '../permission.js';

@@ -1,4 +1,4 @@
-import { objectIdRegex } from 'ciam-commons/Check';
+import { objectIdRegex } from 'ciam-commons';
 import crypto from 'crypto';
 import express, { Request, Response } from 'express';
 import { header, query } from 'express-validator';

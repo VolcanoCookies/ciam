@@ -1,6 +1,4 @@
-import { objectIdRegex } from 'ciam-commons/Check';
-import { flagArray } from 'ciam-commons/Permission';
-import { difference } from 'ciam-commons/utils';
+import { difference, flagArray, objectIdRegex } from 'ciam-commons';
 import express, { Request, Response } from 'express';
 import { body, param, query } from 'express-validator';
 import { checkPermissions } from '../permission.js';
