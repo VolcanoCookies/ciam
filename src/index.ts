@@ -72,6 +72,9 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+const cookieSecret = process.env.COOKIE_SECRET as string || process.exit(76);
+app.use(cookieParser(cookieSecret));
+
 app.use(async (req: Request, res: Response, next: NextFunction) => {
 	//@ts-ignore
 	const tokenId = req?.auth?.id;
