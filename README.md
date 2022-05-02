@@ -13,3 +13,4 @@
 | DATABASE_URL          | Url for connecting to the mongo database |
 | PORT                  | What port to open the api on             |
 | JWT_SECRET            | Secret for signing jwts                  |
+| COOKIE_SECRET         | Secret for signing cookies               |
