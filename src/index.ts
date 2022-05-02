@@ -13,7 +13,8 @@ import { PermissionRouter } from './routes/PermissionRouter.js';
 import { RoleRouter } from './routes/RoleRouter.js';
 import { UserRouter } from './routes/UserRouter.js';
 import { User, UserEntry, UserType } from './schemas/UserSchema.js';
-import { createToken, validate } from './utils.js';
+import { jwtFromUser, validate } from './utils.js';
+import cookieParser from 'cookie-parser';
 
 log.setLevel(process.env.IS_DEV ? log.levels.DEBUG : log.levels.INFO);
 
@@ -47,7 +48,7 @@ const init = async () => {
 
 	//@ts-ignore
 	const systemUser: User = await User.findOneAndUpdate(filter, update, { upsert: true });
-	log.info(`Upserted SYSTEM user with token "${createToken(systemUser)}"`);
+	log.info(`Upserted SYSTEM user with token "${jwtFromUser(systemUser)}"`);
 };
 
 const app = express();
@@ -62,7 +63,7 @@ app.use(jwt({
 	secret: process.env.JWT_SECRET as string,
 	algorithms: ['HS256'],
 	requestProperty: 'auth'
-}).unless({ path: ['/login', '/callback'] }));
+}).unless({ path: ['/login', '/callback', '/confirm'] }));
 
 app.use((req, res, next) => {
 	req.body = sanitize(req.body);
@@ -73,9 +74,9 @@ app.use(express.json());
 
 app.use(async (req: Request, res: Response, next: NextFunction) => {
 	//@ts-ignore
-	const userId = req?.auth?.id;
-	if (userId) {
-		const user = await User.findById(userId);
+	const tokenId = req?.auth?.id;
+	if (tokenId) {
+		const user = await User.findById(tokenId);
 		if (!user) return res.status(401).send('Invalid token');
 		req.user = user as User;
 		req.flags = await flattenUser(user as UserEntry);
