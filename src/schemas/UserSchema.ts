@@ -77,4 +77,4 @@ const UserSchema = new Schema<User>({
 
 const User = mongoose.model<User>(REFS.USER, UserSchema);
 
-export { User, UserEntry, UserType };
+export { User, UserEntry, UserType, DiscordUser };
