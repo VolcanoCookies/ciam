@@ -3,6 +3,7 @@ import { NextFunction, Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import jsonwebtoken from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import { AccessToken } from './schemas/AuthSchema.js';
 import { User } from './schemas/UserSchema.js';
 
 function stringToObjectIdArray(arr: Array<string>): Array<mongoose.Types.ObjectId> {
@@ -22,10 +23,10 @@ function stringToObjectIdArray(arr: Array<string>): Array<mongoose.Types.ObjectI
 const __url = process.env.IS_DEV ? 'http://localhost:10105' : 'https://ciamapi.centralmind.net';
 const secret = process.env.JWT_SECRET as string;
 
-function createToken(user: User): string {
+function jwtFromUser(user: User): string {
 	const payload = {
 		id: user._id,
-		type: user.type
+		type: 'user'
 	};
 
 	const token = jsonwebtoken.sign(payload, secret, {
@@ -34,6 +35,17 @@ function createToken(user: User): string {
 
 	return token as string;
 };
+
+function jwtFromAccessToken(token: AccessToken): string {
+	const payload = {
+		id: token.token,
+		type: 'token'
+	};
+
+	return jsonwebtoken.sign(payload, secret, {
+		issuer: __url
+	}) as string;
+}
 
 const flagValidator = function (arr: Array<string>) {
 	return arr.every(f => f.match(flagRegex));
@@ -52,6 +64,10 @@ const validate = function (req: Request, res: Response, next: NextFunction) {
 	}
 };
 
+const dateIn = function (futureSec: number): Date {
+	return new Date(Date.now() + futureSec);
+};
+
 type AuthorizedRequest = Request & { user: User; };
 
-export { stringToObjectIdArray, createToken, flagValidator, strictFlagValidator, validate, AuthorizedRequest };
+export { stringToObjectIdArray, jwtFromUser, flagValidator, strictFlagValidator, validate, dateIn, AuthorizedRequest };
