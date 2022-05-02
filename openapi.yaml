@@ -717,6 +717,87 @@ paths:
         '404':
           description: 'Entity specified by id field was not found'
 
+  /login/identify:
+    get:
+      summary: 'Simple OAuth endpoint'
+      description: |
+        Redirect users to this endpoint to perform a simple version of OAuth.
+        Once the flow is complete the user will be redirected to your website with a code. You can then use this code to get the user info.
+      tags:
+        - auth
+      parameters:
+        - in: query
+          name: redirect
+          description: |
+            The url to redirect the user to. The user will have the code as a query parameter.
+            For example: If the redirect url is 'centralmind.net' then the user will be redirected to 'centralmind.net?code=THEIR_CODE'
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: 'Redirect to discord OAuth2'
+
+  /auth/identify/{code}:
+    get:
+      summary: 'Get user information'
+      description: |
+        Get user information from a code after they have completed the indentification flow.
+      tags:
+        - auth
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            $ref: '#/components/schemas/uuid'
+          description: 'The code returned when the user was redirected back to your website'
+      responses:
+        '200':
+          description: 'Returns the user data'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    $ref: '#/components/schemas/uuid'
+                    description: 'One time code for getting this data'
+                  redirect:
+                    type: string
+                    description: |
+                      Url the code for this data was redirected token.
+                      Make sure this matches the redirect url you provided.
+                  user:
+                    type: object
+                    description: 'Partial user object'
+                    properties:
+                      _id:
+                        $ref: '#/components/schemas/ObjectId'
+                        description: 'The users ID, not the same as a discord ID'
+                      name:
+                        type: string
+                        description: 'The name of this user'
+                      avatar:
+                        type: string
+                        description: 'Avatar url'
+                      discord:
+                        $ref: '#/components/schemas/UserDiscord'
+                    required:
+                      - _id
+                      - name
+                      - avatar
+                      - discord
+                required:
+                  - code
+                  - redirect
+                  - user
+
+        '401':
+          description: 'Invalid token or missing permissions'
+        '400':
+          description: 'Invalid code or user no longer exists'
+
   /login:
     get:
       summary: 'Redirect endpoint for OAuth'
@@ -823,6 +904,13 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    uuid:
+      type: string
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      # the regex above limits the length;
+      # however, some tools might require explicit settings:
+      minLength: 36
+      maxLength: 36
     ObjectId:
       type: string
       maxLength: 24
