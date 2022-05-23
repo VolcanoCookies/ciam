@@ -1,109 +1,153 @@
-import { difference, flagArray, objectIdRegex } from 'ciam-commons';
+import {
+	difference,
+	Flag,
+	flagArray,
+	flagRegex,
+	objectIdRegex,
+} from 'ciam-commons';
 import express, { Request, Response } from 'express';
 import { body, param, query } from 'express-validator';
-import { checkPermissions } from '../permission.js';
-import { Role } from '../schemas/RoleSchema.js';
-import { flagValidator } from '../utils.js';
+import { assertPermissions } from '../permission.js';
+import { roleModel } from '../schemas/RoleSchema.js';
+import {
+	bodyHasAny,
+	TypedQueryRequest,
+	TypedRequest,
+	validate,
+} from '../utils.js';
 
-const RoleRouter = express.Router();
+const roleRouter = express.Router();
 
-RoleRouter.post('/create',
-	body('name').isString().notEmpty(),
-	body('description').isString().notEmpty(),
-	body('permissions').optional().isArray().custom(flagValidator),
-	async (req: Request, res: Response) => {
-		await checkPermissions(req, `ciam.role.create`);
+interface RolePost {
+	name: string;
+	description: string;
+	permissions?: Flag[];
+}
+
+roleRouter.post(
+	'/',
+	body('name').isString(),
+	body('description').isString(),
+	body('permissions.*').matches(flagRegex),
+	validate,
+	async (req: TypedRequest<RolePost>, res: Response) => {
+		await assertPermissions(req, `ciam.role.create`);
 
 		const { name, description, permissions } = req.body;
 
-		const role = new Role({
-			name: name,
-			description: description,
+		const role = new roleModel({
+			name,
+			description,
 			permissions: permissions || [],
-			creator: req.user._id
+			creator: req.user._id,
 		});
 
 		const op = await role.save();
 		if (!op) return res.sendStatus(500);
 		res.send(op);
-	});
+	}
+);
 
-RoleRouter.get('/list',
-	query('skip').isInt({ min: 0 }).default(0),
-	query('limit').isInt({ min: 1, max: 100 }).default(100),
-	async (req: Request, res: Response) => {
-		//@ts-ignore
-		const { skip, limit } = req.query as { skip: number, limit: number; };
+interface RolePatch {
+	_id: string;
+	name?: string;
+	description?: string;
+	permissions?: Flag[];
+}
 
-		await checkPermissions(req, `ciam.role.list`);
-
-		let query = Role.find({})
-			.limit(limit)
-			.skip(skip);
-
-		const op = await query;
-		if (!op) return res.sendStatus(500);
-
-		res.send(op);
-	});
-
-RoleRouter.post('/update',
-	body('_id').exists().isString().matches(objectIdRegex),
-	body('name').optional().isString().notEmpty(),
-	body('description').optional().isString().notEmpty(),
-	body('permissions').optional().isArray().custom(flagValidator),
-	async (req, res) => {
+// TODO: add inherit
+roleRouter.patch(
+	'/',
+	body('_id').matches(objectIdRegex),
+	body('name').optional().isString(),
+	body('description').optional().isString(),
+	body('permissions.*').matches(flagRegex),
+	bodyHasAny('name', 'description', 'permissions.*'),
+	validate,
+	async (req: TypedRequest<RolePatch>, res: Response) => {
 		const roleId = req.body._id;
-		await checkPermissions(req, `ciam.role.update.${roleId}`);
+		await assertPermissions(req, `ciam.role.update.${roleId}`);
 
-		const role = await Role.findOne({ _id: roleId });
-		if (!role) return res.status(404).send('Role not found');
+		const role = await roleModel.findOne({ _id: roleId });
+		if (role === null) return res.status(404).send('Role not found');
 
-		const { name, description, inherit, permissions } = req.body;
+		const { name, description, permissions } = req.body;
 
 		if (permissions) {
 			// Check if the user updating this role is allowed to give it the provided permissions
 			const added = difference(permissions, role.permissions);
 			const removed = difference(role.permissions, permissions);
 
-			const required = new Array();
-			added.forEach(p => required.push(`ciam.permission.grant.${p}`));
-			removed.forEach(p => required.push(`ciam.permission.revoke.${p}`));
+			const required = new Array<string>();
+			added.forEach((p) =>
+				required.push(`ciam.permission.grant.${p.toString()}`)
+			);
+			removed.forEach((p) =>
+				required.push(`ciam.permission.revoke.${p.toString()}`)
+			);
 
-			await checkPermissions(req, ...required);
+			await assertPermissions(req, ...required);
 			role.set('permissions', flagArray(permissions));
 		}
-		if (name)
-			role.name = name;
-		if (description)
-			role.description = description;
-		//if (inherit)
-		//role.inherit = stringToObjectIdArray(unique(inherit));
+		if (name) role.name = name;
+		if (description) role.description = description;
+		//  if (inherit)
+		//  role.inherit = stringToObjectIdArray(unique(inherit));
 
 		const op = await role.save();
 		if (!op) return res.sendStatus(500);
 		res.send(op);
-	});
+	}
+);
 
-RoleRouter.get('/:roleId',
-	param('roleId').exists().isString().matches(objectIdRegex),
+interface RoleListGet {
+	skip: number;
+	limit: number;
+}
+
+roleRouter.get(
+	'/:roleId',
+	param('roleId').matches(objectIdRegex),
+	validate,
 	async (req: Request, res: Response) => {
 		const roleId = req.params.roleId;
-		await checkPermissions(req, `ciam.role.get.${roleId}`);
-		const op = await Role.findOne({ _id: roleId });
+		await assertPermissions(req, `ciam.role.get.${roleId}`);
+
+		const op = await roleModel.findOne({ _id: roleId });
 		if (!op) return res.status(404).send('Role not found');
 		res.send(op);
-	});
+	}
+);
 
-RoleRouter.delete('/:roleId',
-	param('roleId').exists().isString().matches(objectIdRegex),
+roleRouter.delete(
+	'/:roleId',
+	param('roleId').matches(objectIdRegex),
+	validate,
 	async (req: Request, res: Response) => {
 		const roleId = req.params.roleId;
-		await checkPermissions(req, `ciam.role.delete.${roleId}`);
-		const op = await Role.findOneAndDelete({ _id: roleId });
+		await assertPermissions(req, `ciam.role.delete.${roleId}`);
+
+		const op = await roleModel.findOneAndDelete({ _id: roleId });
 		if (!op) return res.status(404).send('Role not found');
 		res.send(op);
-	});
+	}
+);
 
-export { RoleRouter };
+roleRouter.get(
+	'/list',
+	query('skip').default(0).isInt({ min: 0 }),
+	query('limit').default(100).isInt({ min: 1, max: 100 }),
+	validate,
+	async (req: TypedQueryRequest<RoleListGet>, res: Response) => {
+		const { skip, limit } = req.query;
 
+		await assertPermissions(req, `ciam.role.list`);
+
+		const op = await roleModel.find({}).limit(limit).skip(skip);
+		if (!op) return res.sendStatus(500);
+
+		res.send(op);
+	}
+);
+
+export { roleRouter };

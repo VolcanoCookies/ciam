@@ -4,24 +4,32 @@ import express, { Request, Response } from 'express';
 import { header, param, query } from 'express-validator';
 import fetch from 'node-fetch';
 import { URLSearchParams } from 'url';
-import { checkPermissions } from '../permission.js';
-import { AccessToken, AuthRequest, IdentifyData, IdentifyRequest } from '../schemas/AuthSchema.js';
-import { DiscordUser, User, UserEntry } from '../schemas/UserSchema.js';
+import {
+	DISCORD_CLIENT_ID,
+	DISCORD_CLIENT_SECRET,
+	REDIRECT,
+} from '../config.js';
+import { assertPermissions } from '../permission.js';
+import {
+	AccessToken,
+	AuthRequest,
+	IdentifyData,
+} from '../schemas/AuthSchema.js';
+import {
+	DiscordUser,
+	User,
+	UserEntry,
+	userModel,
+} from '../schemas/UserSchema.js';
 import { dateIn } from '../utils.js';
 
-const AuthRouter = express.Router();
-const PublicAuthRouter = express.Router();
-// Our own url, used for redirecting
-const callback = process.env.REDIRECT as string;
-const secret = process.env.CLIENT_SECRET as string;
-
-const clientId = process.env.DISCORD_CLIENT_ID as string;
-const clientSecret = process.env.DISCORD_CLIENT_SECRET as string;
+const authRouter = express.Router();
+const publicAuthRouter = express.Router();
 
 /**
- * 
+ *
  * OAuth
- * 
+ *
  * 1. Website makes post request with the auth flow it wants to create.
  * 2. CIAM return the one time url to that auth flow
  * 3. Website redirects the user to that url
@@ -29,24 +37,27 @@ const clientSecret = process.env.DISCORD_CLIENT_SECRET as string;
  * 5. User confirms and gets sent to discord.
  * 6. User returns and ciam redirects it back to service together with code.
  * 7. Code can be used to get an access token that works like a regular jwt token for that subset of permissions the service requested.
- * 
+ *
  * CIAM also sets cookies for entire centralmind.net domain so that any service can identify an user without having them login.
- * 
+ *
  * Websites can also do a simpler version that only sets the cookie to identify the user if they don't need any perms from them.
- * 
+ *
  */
 
-async function createIdentifyData(user: User, redirect: string): Promise<IdentifyData> {
+const createIdentifyData = async (
+	user: User,
+	redirect: string
+): Promise<IdentifyData> => {
 	const code = crypto.randomUUID();
 	const data = await new IdentifyData({
-		redirect: redirect,
+		redirect,
 		userId: user._id,
-		code: code,
+		code,
 		createdAt: Date.now(),
-		expiresAt: dateIn(60 * 15)
+		expiresAt: dateIn(60 * 15),
 	}).save();
 	return data;
-}
+};
 
 interface IdentifyDataResponse {
 	code: string;
@@ -62,8 +73,10 @@ interface PartialUser {
 	discord: DiscordUser;
 }
 
-async function getResponseFromIdentifyData(data: IdentifyData): Promise<IdentifyDataResponse | undefined> {
-	const user = await User.findById(data.userId);
+const getResponseFromIdentifyData = async (
+	data: IdentifyData
+): Promise<IdentifyDataResponse | undefined> => {
+	const user = await userModel.findById(data.userId);
 	if (!user) return undefined;
 
 	const response: IdentifyDataResponse = {
@@ -73,23 +86,23 @@ async function getResponseFromIdentifyData(data: IdentifyData): Promise<Identify
 			_id: user._id.toHexString(),
 			name: user.name,
 			avatar: user.avatar,
-			discord: user.discord
-		}
+			discord: user.discord,
+		},
 	};
 
 	return response;
-}
+};
 
-PublicAuthRouter.get('/login/identify',
+/* publicAuthRouter.get(
+	'/login/identify',
 	query('redirect').isString().exists().isURL(),
 	async (req: Request, res: Response) => {
-
 		const redirect = req.query.redirect as string;
 
 		// If user has already identifies with ciam before
 		const userId = req.signedCookies['ciam_identify'];
 		if (userId) {
-			const user = await User.findById(userId);
+			const user = await userModel.findById(userId);
 			if (user) {
 				const data = await createIdentifyData(user, redirect);
 				return res.redirect(`${data.redirect}?code=${data.code}`);
@@ -100,12 +113,22 @@ PublicAuthRouter.get('/login/identify',
 
 		const state = crypto.randomUUID();
 
-		res.cookie('identify_state', state, { maxAge: 15 * 60 * 1000, signed: true });
-		res.cookie('identify_redirect', redirect, { maxAge: 15 * 60 * 1000, signed: true });
-		return res.redirect(`https://discord.com/api/oauth2/authorize?response_type=code&client_id=${process.env.CLIENT_ID}&scope=identify&redirect_url=${callback}/identify&state=${request.stateId}`);
-	});
+		res.cookie('identify_state', state, {
+			maxAge: 15 * 60 * 1000,
+			signed: true,
+		});
+		res.cookie('identify_redirect', redirect, {
+			maxAge: 15 * 60 * 1000,
+			signed: true,
+		});
+		return res.redirect(
+			`https://discord.com/api/oauth2/authorize?response_type=code&client_id=${DISCORD_CLIENT_ID}&scope=identify&redirect_url=${REDIRECT}/identify&state=${request.stateId}`
+		);
+	}
+); */
 
-PublicAuthRouter.get('/callback/identify',
+/* publicAuthRouter.get(
+	'/callback/identify',
 	query('code').exists().isString(),
 	query('state').exists().isString(),
 	async (req: Request, res: Response) => {
@@ -124,7 +147,7 @@ PublicAuthRouter.get('/callback/identify',
 		const data = await requestDiscordData(token);
 		if (!data) return res.status(400);
 
-		let user = await User.findOne({ 'discord.id': data.id });
+		let user = await userModel.findOne({ 'discord.id': data.id });
 		if (!user) user = await createUserFromDiscordData(data);
 
 		res.cookie('ciam_identify', user._id, {
@@ -133,19 +156,23 @@ PublicAuthRouter.get('/callback/identify',
 			domain: process.env.DEV ? 'localhost' : 'ciamapi.centralmind.net',
 			secure: true,
 			// TODO: Security vulnerability to have it lax?
-			sameSite: 'strict'
+			sameSite: 'strict',
 		});
 
 		const identifyData = await createIdentifyData(user, redirect);
-		return res.redirect(`${identifyData.redirect}?code=${identifyData.code}`);
-	});
-
-AuthRouter.get('/identify/:code',
+		return res.redirect(
+			`${identifyData.redirect}?code=${identifyData.code}`
+		);
+	}
+); */
+/*
+authRouter.get(
+	'/identify/:code',
 	param('code').exists().isString().isUUID(),
 	async (req: Request, res: Response) => {
-		const code = req.params.code as string;
+		const code = req.params.code;
 
-		const data = await IdentifyData.findOne({ code: code });
+		const data = await IdentifyData.findOne({ code });
 		if (!data) return res.status(400).send('Invalid code');
 
 		const responseData = await getResponseFromIdentifyData(data);
@@ -153,19 +180,24 @@ AuthRouter.get('/identify/:code',
 
 		res.send(responseData);
 		data.delete();
-	});
+	}
+);
 
-PublicAuthRouter.get('/login',
+publicAuthRouter.get(
+	'/login',
 	query('returnUrl').isString().exists().isURL(),
 	query('domain').isString().exists().isURL(),
-	query('scope').isArray().exists().custom((v: Array<string>) => {
-		return v.forEach(f => flag(f));
-	}),
+	query('scope')
+		.isArray()
+		.exists()
+		.custom((v: string[]) => {
+			return v.forEach((f) => flag(f));
+		}),
 	query('client').isString().exists().matches(objectIdRegex),
 	async (req: Request, res: Response) => {
 		const { returnUrl, domain, scope, clientId } = req.query;
 
-		const client = await User.findOne({ _id: clientId });
+		const client = await userModel.findOne({ _id: clientId });
 		// Change this to redirect back?
 		if (!client) return res.status(400).send('Invalid client id');
 
@@ -173,35 +205,47 @@ PublicAuthRouter.get('/login',
 		const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
 		const authRequest = new AuthRequest({
-			scope: scope,
+			scope,
 			redirect: returnUrl,
-			domain: domain,
-			expiresAt: expiresAt,
+			domain,
+			expiresAt,
 			state: 'request',
 			stateId: crypto.randomUUID(),
-			client: client
+			client,
 		});
 
 		await authRequest.save();
 
-		return res.redirect(`https://discord.com/api/oauth2/authorize?response_type=code&client_id=${process.env.CLIENT_ID}&scope=identify&redirect_url=${callback}&state=${authRequest.state}`);
-	});
+		return res.redirect(
+			`https://discord.com/api/oauth2/authorize?response_type=code&client_id=${DISCORD_CLIENT_ID}&scope=identify&redirect_url=${REDIRECT}&state=${authRequest.state}`
+		);
+	}
+);
 
-PublicAuthRouter.get('/confirm',
+
+publicAuthRouter.get(
+	'/confirm',
 	query('stateId').isString().exists(),
 	async (req: Request, res: Response) => {
 		const stateId = req.query.stateId;
 
-		const auth = await AuthRequest.findOne({ stateId: stateId, state: 'request' });
+		const auth = await AuthRequest.findOne({
+			stateId,
+			state: 'request',
+		});
 		if (!auth) return res.sendStatus(401);
 
 		auth.state = 'pending';
 		await auth.save();
 
-		return res.redirect(`https://discord.com/api/oauth2/authorize?response_type=code&client_id=${process.env.CLIENT_ID}&scope=identify&redirect_url=${auth.callback}&state=${auth.stateId}`);
-	});
+		return res.redirect(
+			`https://discord.com/api/oauth2/authorize?response_type=code&client_id=${DISCORD_CLIENT_ID}&scope=identify&redirect_url=${auth.callback}&state=${auth.stateId}`
+		);
+	}
+);
 
-PublicAuthRouter.get('/callback',
+publicAuthRouter.get(
+	'/callback',
 	query('code').exists().isString(),
 	query('state').exists().isString(),
 	async (req: Request, res: Response) => {
@@ -210,7 +254,10 @@ PublicAuthRouter.get('/callback',
 		// Ciam auth request reference code
 		const state = req.query.state as string;
 
-		const auth = await AuthRequest.findOne({ stateId: state, state: 'pending' });
+		const auth = await AuthRequest.findOne({
+			stateId: state,
+			state: 'pending',
+		});
 		if (!auth) return res.status(400).send('Bad code');
 		auth.delete();
 
@@ -219,7 +266,7 @@ PublicAuthRouter.get('/callback',
 		const data = await requestDiscordData(token);
 		if (!data) return res.status(400);
 
-		let user = await User.findOne({ 'discord.id': data.id });
+		let user = await userModel.findOne({ 'discord.id': data.id });
 		if (!user) user = await createUserFromDiscordData(data);
 
 		const tokenExpiresAt = new Date(Date.now() + 24 * 3600 * 1000);
@@ -231,8 +278,8 @@ PublicAuthRouter.get('/callback',
 			refreshToken: crypto.randomUUID(),
 			subject: user,
 			client: auth.client,
-			tokenExpiresAt: tokenExpiresAt,
-			refreshTokenExpiresAt: refreshTokenExpiresAt
+			tokenExpiresAt,
+			refreshTokenExpiresAt,
 		}).save();
 
 		res.cookie('ciam_access_token', accessToken.token, {
@@ -240,52 +287,62 @@ PublicAuthRouter.get('/callback',
 			signed: true,
 			domain: auth.domain,
 			secure: true,
-			sameSite: 'lax'
+			sameSite: 'lax',
 		});
 		res.cookie('ciam_refresh_token', accessToken.refreshToken, {
 			expires: refreshTokenExpiresAt,
 			signed: true,
 			domain: auth.domain,
 			secure: true,
-			sameSite: 'lax'
+			sameSite: 'lax',
 		});
 
 		res.redirect(auth.redirect);
-	});
+	}
+);
 
-AuthRouter.get('/user',
+authRouter.get(
+	'/user',
 	header('ciam_token').isString().exists(),
 	async (req: Request, res: Response) => {
-
 		const token = req.headers['ciam_token'];
-		const accessToken = await AccessToken.findOne({ token: token, client: req.user._id });
+		const accessToken = await AccessToken.findOne({
+			token,
+			client: req.user._id,
+		});
 		if (!accessToken) return res.status(400).send('invalid token');
-
 
 		let data: any;
 		switch (accessToken.scope) {
 			case 'identify': {
-				const subject = await User.findOne({ _id: accessToken.subject });
+				const subject = await userModel.findOne({
+					_id: accessToken.subject,
+				});
 				if (!subject) return res.status(400).send('bad subject');
 				data = {
 					id: subject.id,
 					username: subject.name,
-					discord: subject.discord
+					discord: subject.discord,
 				};
 				break;
 			}
 		}
 
 		return res.send(data);
-	});
+	}
+);
 
-AuthRouter.get('/refresh',
+authRouter.get(
+	'/refresh',
 	query('refreshToken').isString().exists(),
 	async (req: Request, res: Response) => {
-		await checkPermissions(req, 'ciam.auth.refresh');
+		checkPermissions(req, 'ciam.auth.refresh');
 
 		const refreshToken = req.query.refreshToken;
-		const accessToken = await AccessToken.findOne({ refreshToken: refreshToken, client: req.user._id });
+		const accessToken = await AccessToken.findOne({
+			refreshToken,
+			client: req.user._id,
+		});
 
 		if (!accessToken) return res.status(400).send('Invalid refresh token');
 
@@ -299,8 +356,8 @@ AuthRouter.get('/refresh',
 			subject: accessToken.subject,
 			client: accessToken.client,
 			createdAt: Date.now(),
-			tokenExpiresAt: tokenExpiresAt,
-			refreshTokenExpiresAt: refreshTokenExpiresAt
+			tokenExpiresAt,
+			refreshTokenExpiresAt,
 		}).save();
 
 		if (!newAccessToken) return res.sendStatus(500);
@@ -310,56 +367,62 @@ AuthRouter.get('/refresh',
 			token: newAccessToken.token,
 			refreshToken: newAccessToken.refreshToken,
 			tokenExpiresAt: newAccessToken.tokenExpiresAt,
-			refreshTokenExpiresAt: newAccessToken.refreshTokenExpiresAt
+			refreshTokenExpiresAt: newAccessToken.refreshTokenExpiresAt,
 		});
-
-	});
-
-async function createUserFromDiscordData(data: DiscordData): Promise<UserEntry> {
-	const user = await new User({
+	}
+);
+*/
+const createUserFromDiscordData = async (
+	data: DiscordData
+): Promise<UserEntry> => {
+	const user = await new userModel({
 		name: `${data.username}#${data.discriminator}`,
 		avatar: data.avatar,
 		discord: {
 			id: data.id,
 			username: data.username,
-			discriminator: data.discriminator
-		}
+			discriminator: data.discriminator,
+		},
 	}).save();
 	return user;
-}
+};
 
-async function requestAccessToken(code: string): Promise<string | undefined> {
-	const data = await fetch(('https://discord.com/api/v8/oauth2/token'), {
+const requestAccessToken = async (
+	code: string
+): Promise<string | undefined> => {
+	const data = await fetch('https://discord.com/api/v8/oauth2/token', {
 		method: 'POST',
 		headers: {
-			'Content-Type': 'application/x-www-form-urlencoded'
+			'Content-Type': 'application/x-www-form-urlencoded',
 		},
 		body: new URLSearchParams({
-			'client_id': clientId,
-			'client_secret': clientSecret,
-			'grant_type': 'authorization_code',
-			'code': code,
-			'redirect_url': callback
-		})
+			client_id: DISCORD_CLIENT_ID,
+			client_secret: DISCORD_CLIENT_SECRET,
+			grant_type: 'authorization_code',
+			code: code,
+			redirect_url: REDIRECT,
+		}),
 	});
 	const json: any = await data.json();
 	return json['access_token'];
-}
+};
 
 interface DiscordData {
-	id: string,
-	username: string,
-	discriminator: string,
-	avatar: string,
-	verified: boolean,
-	flags: number,
-	banner: string,
-	accent_color: number,
-	premium_type: number,
+	id: string;
+	username: string;
+	discriminator: string;
+	avatar: string;
+	verified: boolean;
+	flags: number;
+	banner: string;
+	accent_color: number;
+	premium_type: number;
 	public_flags: number;
 }
 
-async function requestDiscordData(accessToken: string): Promise<DiscordData | undefined> {
+const requestDiscordData = async (
+	accessToken: string
+): Promise<DiscordData | undefined> => {
 	const data = await fetch('http://discordapp.com/api/users/@me', {
 		method: 'GET',
 		headers: {
@@ -368,7 +431,6 @@ async function requestDiscordData(accessToken: string): Promise<DiscordData | un
 	});
 	const json: any = await data.json();
 	return json['id'] ? json : undefined;
-}
+};
 
-export { AuthRouter, PublicAuthRouter };
-
+export { authRouter, publicAuthRouter };

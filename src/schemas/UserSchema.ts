@@ -1,6 +1,7 @@
+import { Flag } from 'ciam-commons';
 import mongoose, { Document, Types } from 'mongoose';
+import { flagGetter, flagSetter } from '../utils.js';
 import { REFS } from './refs.js';
-import { Role } from './RoleSchema.js';
 
 const Schema = mongoose.Schema;
 
@@ -11,70 +12,75 @@ const Schema = mongoose.Schema;
 enum UserType {
 	USER = 'user',
 	BOT = 'bot',
-	SYSTEM = 'system'
+	SYSTEM = 'system',
 }
 
 interface DiscordUser {
 	// Discord id of this user
-	id: string,
+	id: string;
 	// Discord username of this user
-	username: string,
+	username?: string;
 	// Discord discriminator of this user
-	discriminator: number;
+	discriminator?: number;
 }
 
 interface User {
 	// Unique id for this user
-	_id: Types.ObjectId,
+	_id: Types.ObjectId;
 	// Optional discord account information
-	name: string,
+	name: string;
 	// Name of this user
-	avatar: string,
+	avatar: string;
 	// Avatar of this user, TODO: figure out if url or ref or whatever
-	roles: Types.Array<Types.ObjectId> | Types.Array<Role>,
+	roles: string[];
 	// The roles this user has, will inherit all their permissions
-	permissions: Types.Array<string>,
+	permissions: Flag[];
 	// The explicit permissions this user has
-	discord: DiscordUser,
+	discord: DiscordUser;
 	// The type of the account
 	type: UserType;
 }
 
-type UserEntry = Document<unknown, any, User> & User & { _id: Types.ObjectId; };
+type UserEntry = Document<unknown, any, User> & User & { _id: Types.ObjectId };
 
-const DiscordUserSchema = new Schema<DiscordUser>({
+const discordUserSchema = new Schema<DiscordUser>({
 	id: {
 		type: String,
-		index: true
+		index: true,
 	},
 	username: String,
 	discriminator: String,
 });
 
-const UserSchema = new Schema<User>({
+const userSchema = new Schema<User>({
 	discord: {
-		type: DiscordUserSchema,
-		optional: true
+		type: discordUserSchema,
+		optional: true,
 	},
 	name: {
 		type: String,
-		index: true
+		index: true,
 	},
 	avatar: String,
-	roles: [{
-		type: Schema.Types.ObjectId,
-		ref: REFS.ROLE
-	}],
-	permissions: [{
-		type: String,
-		ref: REFS.PERMISSION
-	}],
+	roles: [
+		{
+			type: Schema.Types.ObjectId,
+			ref: REFS.ROLE,
+		},
+	],
+	permissions: [
+		{
+			type: String,
+			set: flagSetter,
+			get: flagGetter,
+		},
+	],
 	type: {
 		type: String,
-		enum: UserType
-	}
+		enum: UserType,
+	},
 });
 
-const User = mongoose.model<User>(REFS.USER, UserSchema);
+const userModel = mongoose.model<User>(REFS.USER, userSchema);
 
-export { User, UserEntry, UserType, DiscordUser };
+export { userModel, User, UserEntry, UserType, DiscordUser };

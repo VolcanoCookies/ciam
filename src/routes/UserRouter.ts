@@ -1,28 +1,52 @@
-import { difference, objectIdRegex } from 'ciam-commons';
+import {
+	difference,
+	discordIdRegex,
+	Flag,
+	flagRegex,
+	objectIdRegex,
+} from 'ciam-commons';
 import express, { Request, Response } from 'express';
 import { body, param, query } from 'express-validator';
-import { checkPermissions } from '../permission.js';
-import { User } from '../schemas/UserSchema.js';
-import { flagValidator } from '../utils.js';
+import { assertPermissions } from '../permission.js';
+import { userModel } from '../schemas/UserSchema.js';
+import {
+	flagValidator,
+	TypedQueryRequest,
+	TypedRequest,
+	validate,
+} from '../utils.js';
 
-const UserRouter = express.Router();
+const userRouter = express.Router();
 
-UserRouter.get('/me', (req, res) => {
+userRouter.get('/me', (req, res) => {
 	return res.status(200).send(req.user);
 });
 
-UserRouter.post('/create',
+interface UserPost {
+	name: string;
+	roles?: string[];
+	permissions?: Flag[];
+	discord?: {
+		id: string;
+	};
+}
+
+userRouter.post(
+	'/',
 	body('name').exists().isString(),
 	body('roles').optional().isArray(),
 	body('permissions').optional().isArray().custom(flagValidator),
-	async (req, res) => {
+	body('discord.id').optional().matches(discordIdRegex),
+	validate,
+	async (req: TypedRequest<UserPost>, res: Response) => {
 		const { name, roles, permissions, discord } = req.body;
 		const id = discord?.id;
 
 		if (permissions) {
-			//@ts-ignore
-			const required = permissions.map(f => `ciam.permission.grant.${f}`);
-			await checkPermissions(req, ...required);
+			const required = permissions.map(
+				(f) => `ciam.permission.grant.${f.toString()}`
+			);
+			await assertPermissions(req, ...required);
 		}
 
 		if (roles) {
@@ -31,102 +55,133 @@ UserRouter.post('/create',
 					return res.status(400).send('Missing role ' + r);
 		}
 
-		const user = new User({
-			name: name,
-			roles: roles,
-			permissions: permissions
+		const user = new userModel({
+			name,
+			roles,
+			permissions,
 		});
 
 		if (id)
-			//@ts-ignore
-			user.discord = { id: id };
+			user.discord = {
+				id,
+			};
 
 		const op = await user.save();
 		if (!op) return res.sendStatus(500);
 		res.send(op);
-	});
+	}
+);
 
-UserRouter.post('/update',
-	body('_id').exists().isString(),
-	body('name').optional().notEmpty(),
+interface UserPatch {
+	_id: string;
+	name?: string;
+	roles?: string[];
+	permissions?: Flag[];
+}
+
+userRouter.patch(
+	'/',
+	body('_id').matches(objectIdRegex),
+	body('name').optional().isString(),
 	body('roles').optional().isArray(),
-	body('permissions').optional().isArray().custom(flagValidator),
-	async (req, res) => {
+	body('roles.*').matches(objectIdRegex),
+	body('permissions').optional().isArray(),
+	body('permissions.*').matches(flagRegex),
+	validate,
+	async (req: TypedRequest<UserPatch>, res: Response) => {
 		const { _id, name, roles, permissions } = req.body;
-		await checkPermissions(req, `ciam.user.update.${_id}`);
+		await assertPermissions(req, `ciam.user.update.${_id}`);
 
-		const user = await User.findById(_id);
-		if (!user) return res.status(404).send('User not found');
+		const user = await userModel.findById(_id);
 
-		if (permissions) {
-			// Check if the user is allowed to give the provided permissions
-			const added = difference(permissions, user.permissions);
-			const removed = difference(user.permissions, permissions);
+		if (user !== null) {
+			if (permissions) {
+				// Check if the user is allowed to give the provided permissions
+				const added = difference(permissions, user.permissions);
+				const removed = difference(user.permissions, permissions);
 
-			const required = new Array();
-			added.forEach(p => required.push(`ciam.permission.grant.${p}`));
-			removed.forEach(p => required.push(`ciam.permission.revoke.${p}`));
+				const required = new Array<string>();
+				added.forEach((p) =>
+					required.push(`ciam.permission.grant.${p.toString()}`)
+				);
+				removed.forEach((p) =>
+					required.push(`ciam.permission.revoke.${p.toString()}`)
+				);
 
-			await checkPermissions(req, ...required);
-			user.permissions = permissions;
-		}
-		if (name)
-			user.name = name;
-		if (roles) {
-			for (const r of roles)
-				if (!req.user.roles.includes(r))
-					return res.status(400).send('Missing role ' + r);
-			user.roles = roles;
+				await assertPermissions(req, ...required);
+				user.permissions = permissions;
+			}
+
+			if (name !== undefined) user.name = name;
+
+			if (roles !== undefined) {
+				for (const r of roles)
+					if (!req.user.roles.includes(r))
+						return res.status(400).send('Missing role ' + r);
+				user.roles = roles;
+			}
+		} else {
+			return res.status(404).send('User not found');
 		}
 
 		const op = await user.save();
 		if (!op) res.sendStatus(500);
 		res.send(op);
-	});
+	}
+);
 
-UserRouter.get('/list',
-	query('skip').isInt({ min: 0 }).default(0),
-	query('limit').isInt({ min: 1, max: 100 }).default(100),
-	async (req: Request, res: Response) => {
-		//@ts-ignore
-		const { skip, limit } = req.query as { skip: number, limit: number; };
+interface UserListGet {
+	skip: number;
+	limit: number;
+}
 
-		await checkPermissions(req, `ciam.user.list`);
+userRouter.get(
+	'/list',
+	query('skip').default(0).isInt({ min: 0 }),
+	query('limit').default(100).isInt({ min: 1, max: 100 }),
+	validate,
+	async (req: TypedQueryRequest<UserListGet>, res: Response) => {
+		const { skip, limit } = req.query;
 
-		let query = User.find({})
-			.limit(limit)
-			.skip(skip);
+		await assertPermissions(req, `ciam.user.list`);
+
+		const query = userModel.find({}).limit(limit).skip(skip);
 
 		const op = await query;
 		if (!op) return res.sendStatus(500);
 
 		res.send(op);
-	});
+	}
+);
 
-UserRouter.get('/:userId',
-	param('userId').exists().isString().matches(objectIdRegex),
+userRouter.get(
+	'/:userId',
+	param('userId').matches(objectIdRegex),
+	validate,
 	async (req: Request, res: Response) => {
 		const userId = req.params.userId;
-		await checkPermissions(req, `ciam.user.get.${userId}`);
+		await assertPermissions(req, `ciam.user.get.${userId}`);
 
-		const op = await User.findOne({ _id: userId });
+		const op = await userModel.findOne({ _id: userId });
 		if (!op) return res.status(404).send('User not found');
 		res.send(op);
-	});
+	}
+);
 
-UserRouter.delete('/:userId',
-	param('userId').exists().isString().matches(objectIdRegex),
+userRouter.delete(
+	'/:userId',
+	param('userId').matches(objectIdRegex),
+	validate,
 	async (req: Request, res: Response) => {
 		const userId = req.params.userId;
-		await checkPermissions(req, `ciam.user.delete.${userId}`);
+		await assertPermissions(req, `ciam.user.delete.${userId}`);
 
-		//@ts-ignore
-		if (userId == `${req.user._id}`) return res.sendStatus(400);
+		if (userId === req.user._id.toHexString()) return res.sendStatus(400);
 
-		const op = await User.findByIdAndDelete(userId);
+		const op = await userModel.findByIdAndDelete(userId);
 		if (!op) return res.status(404).send('User not found');
 		res.send(op);
-	});
+	}
+);
 
-export { UserRouter };
-
+export { userRouter };

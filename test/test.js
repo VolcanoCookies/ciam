@@ -1,12 +1,53 @@
-import assert from 'assert'
-import { Flag } from 'ciam-commons/permissions'
-import _ from 'lodash'
-import { flattenRole, flattenUser, has, hasAll } from '../dist/permission.js'
-import { Role } from '../dist/schemas/RoleSchema.js'
-import { User } from '../dist/schemas/UserSchema.js'
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable prefer-arrow/prefer-arrow-functions */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 
+import assert from 'assert';
+import { Flag, flagArray, PermissionHolderType } from 'ciam-commons';
+import _ from 'lodash';
+import { checkPermissions, has } from '../dist/permission.js';
+import { discordRoleModel } from '../dist/schemas/DiscordRoleSchema.js';
+import { roleModel } from '../dist/schemas/RoleSchema.js';
+import { userModel } from '../dist/schemas/UserSchema.js';
 
 describe('permission', function () {
+	let testUser;
+	let testRole;
+	let testDiscordRole;
+
+	before(async () => {
+		await Promise.all([
+			userModel.deleteMany({}),
+			roleModel.deleteMany({}),
+			discordRoleModel.deleteMany({}),
+		]);
+
+		const perms = [
+			'some.valid.perms',
+			'some.?.test',
+			'testing.123.asd',
+			'som.wild.*',
+		].map((f) => Flag.validate(f));
+
+		testUser = await new userModel({
+			permissions: perms,
+			discord: {
+				id: '123',
+			},
+		}).save();
+
+		testRole = await new roleModel({
+			permissions: perms,
+		}).save();
+
+		testDiscordRole = await new discordRoleModel({
+			permissions: perms,
+			_id: '123',
+			name: 'test',
+		}).save();
+	});
 
 	const validFlagStrings = [
 		'some.valid',
@@ -15,100 +56,8 @@ describe('permission', function () {
 		'single',
 		'some.?.?.ppe.*',
 		'?',
-		'?.ms'
-	]
-
-	describe('#validFlag()', function () {
-		it('should detect invalid permission flags', function () {
-			const invalid = [
-				'some.invalid.permissions.',
-				'more.invalid.*.perms',
-				'.',
-				'',
-				'.test',
-				'.test.test.',
-				'with.invalid1.123!½.charS',
-				'more.$.e',
-				'mor?'
-			]
-
-			for (const i of invalid) {
-				assert.ok(!validFlag(i), `Invalid flag passed: ${i}`)
-			}
-		})
-
-		it('should detect "*" as a valid permission', function () {
-			assert.ok(validFlag('*'))
-		})
-
-		it('should detect valid permission flags', function () {
-			for (const v of validFlagStrings) {
-				assert.ok(validFlag(v))
-			}
-		})
-
-		it('should correctly detect wildcards', function () {
-			const wildcards = [
-				'*',
-				'test.*',
-				's.o.m.e.*'
-			]
-
-			for (const w of wildcards) {
-				assert.equal(Flag.validate(w).isWildcard, true)
-			}
-		})
-	})
-
-	describe('Flag', function () {
-		describe('#validate()', function () {
-			it('Create Flag class from correct permission flag strings', function () {
-				for (const v of validFlagStrings) {
-					assert.ok(Model.Flag.validate(v))
-				}
-			})
-		})
-	})
-
-	describe('#flattenRole()', function () {
-		it('should return correct permissions from role', function () {
-			const role = {
-				permissions: [
-					'some.valid.permissions',
-					'some.invalid.',
-					'valid',
-					'*',
-					'.'
-				]
-			}
-
-			const res = Array.from(flattenRole(role))
-
-			assert.equal(res.length, 3)
-			assert.equal(res[0], 'some.valid.permissions')
-			assert.equal(res[1], 'valid')
-			assert.equal(res[2], '*')
-		})
-	})
-
-	describe('#flattenUser()', function () {
-		it('should return role permissions too', async function () {
-			const role = await new Role({
-				name: 'test',
-				description: 'test',
-				permissions: ['role.perm']
-			}).save()
-			const user = await new User({
-				name: 'test',
-				permissions: ['user.perm'],
-				roles: [role._id]
-			}).save()
-
-			const flags = (await flattenUser(user)).map(f => `${f}`)
-			flags.should.include('user.perm')
-			flags.should.include('role.perm')
-		})
-	})
+		'?.ms',
+	];
 
 	describe('#has()', function () {
 		it('should correctly pass or fail individual permission checks', function () {
@@ -122,71 +71,81 @@ describe('permission', function () {
 						'*',
 						'?.*',
 						'ciam.?.create',
-						'ciam.role.?'
+						'ciam.role.?',
 					],
 					invalid: [
 						'ciam',
 						'ciam.role',
 						'ciam.role.create.new',
-						'role.*'
-					]
-				}
-			]
+						'role.*',
+					],
+				},
+			];
 
 			for (const { required, valid, invalid } of tests) {
 				for (const v of valid) {
-					assert.ok(has(Model.Flag.validate(required), Model.Flag.validate(v)), `Failed on valid: ${v}`)
+					assert.ok(
+						has(Flag.validate(required), Flag.validate(v)),
+						`Failed on valid: ${v}`
+					);
 				}
 				for (const i of invalid) {
-					assert.ok(!has(Model.Flag.validate(required), Model.Flag.validate(i)), `Failed on invalid: ${i}`)
+					assert.ok(
+						!has(Flag.validate(required), Flag.validate(i)),
+						`Failed on invalid: ${i}`
+					);
 				}
 			}
-
-		})
-	})
-
-	describe('#hasAll()', function () {
-
-
-	})
+		});
+	});
 
 	describe('permformance', function () {
-		it('performance test', function () {
-			const alpha = 'abcdefghijklmnopqrstuvwxyz'
+		it('performance test', async function () {
+			const alpha = 'abcdefghijklmnopqrstuvwxyz';
 			function randomString(len) {
-				var str = ''
-				for (var i = 0; i < len; i++) {
-					str += alpha.charAt(_.random(alpha.length - 1))
+				let str = '';
+				for (let i = 0; i < len; i++) {
+					str += alpha.charAt(_.random(alpha.length - 1));
 				}
-				return str
+				return str;
 			}
 
-			const held = new Array()
-			for (var i = 0; i < 100; i++) {
-				var str = ''
-				const r = _.random(5, 10)
-				for (var j = 0; j < r; j++) {
-					str += randomString(_.random(4, 32))
-					if (j + 1 < r) str += '.'
+			const held = [];
+			for (let i = 0; i < 100; i++) {
+				let str = '';
+				const r = _.random(5, 10);
+				for (let j = 0; j < r; j++) {
+					str += randomString(_.random(4, 32));
+					if (j + 1 < r) str += '.';
 				}
-				held.push(str)
+				held.push(str);
 			}
 
-			const required = new Array()
-			for (var i = 0; i < 100; i++) {
-				var str = ''
-				const r = _.random(5, 10)
-				for (var j = 0; j < r; j++) {
-					str += randomString(_.random(4, 32))
-					if (j + 1 < r) str += '.'
+			const required = [];
+			for (let i = 0; i < 100; i++) {
+				let str = '';
+				const r = _.random(5, 10);
+				for (let j = 0; j < r; j++) {
+					str += randomString(_.random(4, 32));
+					if (j + 1 < r) str += '.';
 				}
-				required.push(str)
+				required.push(str);
 			}
 
-			const heldFlags = flagArray(held)
-			const reqFlags = flagArray(required)
-			assert.ok(!hasAll(reqFlags, heldFlags).passed)
-		})
-	})
+			const heldFlags = flagArray(held);
+			const reqFlags = flagArray(required);
 
-})
+			testUser.permissions = heldFlags;
+			await testUser.save();
+
+			const checkResult = await checkPermissions(
+				{
+					id: testUser._id,
+					type: PermissionHolderType.USER,
+				},
+				reqFlags
+			);
+			assert.ok(!checkResult.passed);
+		});
+	});
+});

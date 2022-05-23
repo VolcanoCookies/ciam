@@ -1,22 +1,17 @@
 import fetch, { Response } from 'node-fetch';
+import { UM_API_TOKEN } from './config.js';
 
-interface UserResponse {
-	discordId: string;
-	roles: Array<string>;
-}
-
-async function request(path: string): Promise<Response> {
+const request = async (path: string): Promise<Response> => {
 	return fetch(`https://umapi.centralmind.net/api${path}`, {
 		headers: {
-			authorization: `Brearer ${process.env.UM_API_TOKEN}`
-		}
+			authorization: `Bearer ${UM_API_TOKEN}`,
+		},
 	});
-}
+};
 
-async function getUserRoles(userId: string): Promise<Array<string>> {
-	return request(`/users/${userId}`).then(res => res.json())
+export const getUserRoles = async (userId: string): Promise<string[]> => {
+	return request(`/users/${userId}`)
+		.then((res) => res.json())
 		.then((json: any) => json.roles)
-		.catch(err => new Array());
-}
-
-export { getUserRoles };
+		.catch((err) => new Array<string>());
+};

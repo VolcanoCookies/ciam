@@ -34,7 +34,7 @@ steps:
     image: plugins/docker
     settings:
       repo: volcanoinc/ciam-backend
-      tags: latest
+      tags: dev-latest
       username:
         from_secret: DOCKER_HUB_USERNAME
       password:
