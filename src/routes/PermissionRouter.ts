@@ -35,15 +35,18 @@ interface PermissionPost {
 
 permissionRouter.post(
 	'/',
+	body('flag')
+		.matches(strictFlagRegex)
+		.customSanitizer((v) => StrictFlag.validate(v)),
 	body('name').isString(),
 	body('description').isString(),
-	body('flag').matches(strictFlagRegex),
 	validate,
 	async (req: TypedRequest<PermissionPost>, res: Response) => {
 		const { name, description, flag } = req.body;
-		const lastIndex = flag.lastIndexOf('.');
-		const key = flag.slice(lastIndex + 1);
-		const path = flag.slice(0, Math.max(lastIndex, 0));
+
+		const lastIndex = flag.value.lastIndexOf('.');
+		const key = flag.value.slice(lastIndex + 1);
+		const path = flag.value.slice(0, Math.max(lastIndex, 0));
 
 		await assertPermissions(
 			req,
@@ -76,7 +79,9 @@ interface PermissionPatch {
 
 permissionRouter.patch(
 	'/',
-	body('flag').exists().isString().matches(strictFlagRegex),
+	body('flag')
+		.matches(strictFlagRegex)
+		.customSanitizer((v) => StrictFlag.validate(v)),
 	body('name').optional().isString().isLength({ min: 1 }),
 	body('description').optional().isString().isLength({ min: 1 }),
 	bodyHasAny('name', 'description'),
@@ -152,7 +157,9 @@ permissionRouter.get(
 
 permissionRouter.post(
 	'/upsert',
-	body('flag').matches(strictFlagRegex),
+	body('flag')
+		.matches(strictFlagRegex)
+		.customSanitizer((v) => StrictFlag.validate(v)),
 	body('name').isString(),
 	body('description').isString(),
 	validate,
@@ -163,9 +170,9 @@ permissionRouter.post(
 			`ciam.permission.upsert.${flag.toString()}`
 		);
 
-		const lastIndex = flag.lastIndexOf('.');
-		const key = flag.slice(lastIndex + 1);
-		const path = flag.slice(0, Math.max(lastIndex, 0));
+		const lastIndex = flag.value.lastIndexOf('.');
+		const key = flag.value.slice(lastIndex + 1);
+		const path = flag.value.slice(0, Math.max(lastIndex, 0));
 
 		const op = await permissionModel.findOneAndUpdate(
 			{ flag },
