@@ -3,39 +3,53 @@ type: kubernetes
 name: default
 
 metadata:
-  namespace: drone
-
-environment:
-  CLIENT_ID: 123456789
-  CLIENT_SECRET: test-secret
-  IS_DEV: true
-  DATABASE_URL: 'mongodb://mongo:27017/ciam-test'
+    namespace: drone
 
 services:
-  - name: mongo
-    image: mongo:5
+    - name: mongo
+      image: mongo:5
 
 steps:
-  - name: mongo-version
-    image: mongo:5
-    commands:
-      - while ! mongo --eval 'db.runCommand("ping").ok' --host mongo --quiet; do sleep 1; done
-      - mongo --host mongo:27017 --eval "db.version()"
+    - name: mongo-version
+      image: mongo:5
+      commands:
+          - while ! mongo --eval 'db.runCommand("ping").ok' --host mongo --quiet; do sleep 1; done
+          - mongo --host mongo:27017 --eval "db.version()"
 
-  - name: test
-    image: node:17
-    commands:
-      - npm install --include=dev
-      - npm install typescript -g
-      - tsc
-      - npm test
+    - name: test
+      image: node:17
+      commands:
+          - npm install --include=dev
+          - npm install typescript -g
+          - tsc
+          - npm test-ci
+      environment:
+          CLIENT_ID: 123456789
+          JWT_SECRET: secret
+          COOKIE_SECRET: secret
+          IS_DEV: true
+          DATABASE_URL:
+              from_secret: DATABASE_URL
+          PORT: 10105
+          REDIRECT: http://localhost:10105/callback
+          DISCORD_CLIENT_ID: 123456789
+          DISCORD_CLIENT_SECRET: secret
+          UM_API_TOKEN: secret
+          LOG_LEVEL: 'ERROR'
+          DISCORD_TOKEN: secret
+          UNIT_TEST: true
 
-  - name: build
-    image: plugins/docker
-    settings:
-      repo: volcanoinc/ciam-backend
-      tags: dev-latest
-      username:
-        from_secret: DOCKER_HUB_USERNAME
-      password:
-        from_secret: DOCKER_HUB_TOKEN
+    - name: build
+      image: plugins/docker
+      settings:
+          repo: volcanoinc/ciam-backend
+          auto_tag: true
+          username:
+              from_secret: DOCKER_HUB_USERNAME
+          password:
+              from_secret: DOCKER_HUB_TOKEN
+      when:
+          branch:
+              - master
+          event:
+              - push
