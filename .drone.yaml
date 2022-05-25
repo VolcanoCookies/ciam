@@ -22,7 +22,7 @@ steps:
           - npm install --include=dev
           - npm install typescript -g
           - tsc
-          - npm test-ci
+          - npm run test-ci
       environment:
           CLIENT_ID: 123456789
           JWT_SECRET: secret
