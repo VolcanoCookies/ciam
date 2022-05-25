@@ -56,7 +56,9 @@ describe('Users', function () {
 	let testUser = undefined;
 
 	beforeEach(async function () {
-		await userModel.deleteMany({});
+		await userModel.deleteMany({
+			_id: { $ne: '000000000000000000000000' },
+		});
 		botUser = await new userModel({
 			name: 'botuser',
 			permissions: ['*'],

@@ -61,7 +61,9 @@ describe('Permissions', function () {
 
 	beforeEach(async function () {
 		await Promise.all([
-			userModel.deleteMany({}),
+			userModel.deleteMany({
+				_id: { $ne: '000000000000000000000000' },
+			}),
 			roleModel.deleteMany({}),
 			permissionModel.deleteMany({}),
 			discordRoleModel.deleteMany({}),

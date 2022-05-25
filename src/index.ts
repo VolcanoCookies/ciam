@@ -50,7 +50,7 @@ prefix.apply(log, {
 const init = async () => {
 	await mongoose.connect(DATABASE_URL);
 
-	const systemUser = await userModel.updateOne(
+	const systemUser = await userModel.findOneAndUpdate(
 		{ _id: '000000000000000000000000' },
 		{
 			name: 'SYSTEM',
@@ -62,7 +62,10 @@ const init = async () => {
 		}
 	);
 
-	if (systemUser === null) process.exit(3);
+	if (systemUser === null) {
+		log.error('System user not found, exiting');
+		process.exit(3);
+	}
 
 	log.info(`Upserted SYSTEM user with token "${jwtFromUser(systemUser)}"`);
 
