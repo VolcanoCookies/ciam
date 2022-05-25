@@ -8,6 +8,7 @@
 		"start": "node dist/index.js",
 		"node-watch": "cd dist && nodemon index.js",
 		"test": "env-cmd -f ./test/.env mocha --recursive --enable-source-maps --exit",
+		"test-ci": "mocha --recursive --enable-source-maps --exit",
 		"redoc-standalone": "redoc-cli bundle openapi.yaml",
 		"build": "tsc",
 		"format": "prettier --write \"src/**/*.ts\"",
